@@ -1,0 +1,4 @@
+{"command": ["D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe", "-m", "pytest", "tests/test_skeptic_regressions.py", "tests/test_runtime.py", "-q"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+...........                                                              [100%]
+11 passed in 7.71s
+{"exit_code": 0, "seconds": 10.141}

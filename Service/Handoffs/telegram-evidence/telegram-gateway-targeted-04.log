@@ -1,0 +1,5 @@
+{"command": ["D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction\\.venv\\Scripts\\python.exe", "-m", "pytest", "-q", "-k", "telegram and not test_telegram_runtime_is_embedded_without_sidecar"], "cwd": "D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction"}
+........................................................................ [ 85%]
+............                                                             [100%]
+84 passed, 542 deselected in 24.43s
+{"exit_code": 0, "seconds": 32.016}

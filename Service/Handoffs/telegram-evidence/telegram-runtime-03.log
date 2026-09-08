@@ -1,0 +1,5 @@
+{"command": ["D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe", "scripts/verify.py"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+All checks passed!
+.......................................                                  [100%]
+39 passed in 28.48s
+{"exit_code": 0, "seconds": 31.39}

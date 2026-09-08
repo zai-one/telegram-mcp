@@ -1,0 +1,210 @@
+{"command": ["D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction\\.venv\\Scripts\\python.exe", "-m", "pytest", "-q", "-k", "telegram"], "cwd": "D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction"}
+.......F.FFF.....................F.......F.............................. [ 94%]
+....                                                                     [100%]
+================================== FAILURES ===================================
+______________ test_telegram_runtime_is_embedded_without_sidecar ______________
+
+    def test_telegram_runtime_is_embedded_without_sidecar() -> None:
+        compose = yaml.safe_load((ROOT / "deploy" / "compose.yml").read_text(encoding="utf-8"))
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        adapter = (ROOT / "src" / "mcp_platform" / "providers" / "telegram.py").read_text(
+            encoding="utf-8"
+        )
+        assert set(compose["services"]) == {"app", "worker"}
+        assert "mcp-telegram-backend" not in compose
+        assert "COPY --chown=mcp:mcp .build/telegram-mcp /vendor/telegram-mcp" in dockerfile
+>       assert "FastMCPTransport" in adapter
+E       assert 'FastMCPTransport' in '"""Compatibility types; real Telegram implementation and upstream live in the pinned wheel."""\nfrom __future__ impor...ny:\n    value = getattr(implementation, name)\n    return translated(value) if inspect.isfunction(value) else value\n'
+
+tests\contract\test_schema_boundary.py:52: AssertionError
+______________ test_telegram_adapter_uses_embedded_mcp_transport ______________
+
+    @pytest.mark.asyncio
+    async def test_telegram_adapter_uses_embedded_mcp_transport() -> None:
+        server = FastMCP1("telegram-fixture")
+    
+        @server.tool()
+        async def list_chats(limit: int = 20, account: str | None = None) -> dict[str, Any]:
+            return {"limit": limit, "account": account}
+    
+        @server.tool()
+        async def search_messages(
+            chat_id: str, query: str, limit: int = 20, account: str | None = None
+        ) -> dict[str, Any]:
+            return {"chat_id": chat_id, "query": query, "limit": limit, "account": account}
+    
+        @server.tool()
+        async def search_global(
+            query: str, page: int = 1, page_size: int = 20, account: str | None = None
+        ) -> dict[str, Any]:
+            return {"query": query, "page": page, "page_size": page_size, "account": account}
+    
+        @server.tool()
+        async def get_messages(
+            chat_id: str, page: int = 1, page_size: int = 20, account: str | None = None
+        ) -> dict[str, Any]:
+            return {"chat_id": chat_id, "page": page, "page_size": page_size, "account": account}
+    
+        @server.tool()
+        async def get_chat(chat_id: str, account: str | None = None) -> dict[str, Any]:
+            return {"chat_id": chat_id, "account": account}
+    
+        @server.tool()
+        async def get_history(
+            chat_id: str, limit: int = 50, account: str | None = None
+        ) -> dict[str, Any]:
+            return {"chat_id": chat_id, "limit": limit, "account": account}
+    
+        @server.tool()
+        async def search_contacts(query: str, account: str | None = None) -> dict[str, Any]:
+            return {"query": query, "account": account}
+    
+        @server.tool()
+        async def search_public_chats(
+            query: str, limit: int = 20, account: str | None = None
+        ) -> dict[str, Any]:
+            return {"query": query, "limit": limit, "account": account}
+    
+        adapter = TelegramAdapter(Path("unused.env"))
+        adapter._server = server
+    
+>       status = await adapter.status()
+                 ^^^^^^^^^^^^^^^^^^^^^^
+
+tests\providers\test_provider_contracts.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (<mcp_platform.providers.telegram.TelegramAdapter object at 0x000001933FD3ED80>,)
+kwargs = {}
+
+    @wraps(function)
+    async def asynchronous(*args: Any, **kwargs: Any) -> Any:
+        previous = depth.get()
+        token = depth.set(previous + 1)
+        admission = service.retry_attempt_admission.set(base.retry_attempt_admission.get())
+        try:
+            return await function(*args, **kwargs)
+        except service.ProviderError as exc:
+            if previous:
+                raise
+>           raise translate_error(exc) from None
+E           mcp_platform.providers.base.ProviderError: embedded Telegram runtime secret is incomplete: TELEGRAM_API_HASH, TELEGRAM_API_ID, TELEGRAM_SESSION_STRING
+
+src\mcp_platform\providers\telegram_bridge.py:64: ProviderError
+_ test_telegram_adapter_fails_closed_on_embedded_upstream_errors[error-result] _
+
+upstream_mode = 'error-result'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("upstream_mode", ["error-result", "error-string"])
+    async def test_telegram_adapter_fails_closed_on_embedded_upstream_errors(
+        upstream_mode: str,
+    ) -> None:
+        server = FastMCP1("telegram-error-fixture")
+    
+        @server.tool()
+        async def list_chats(limit: int = 20, account: str | None = None) -> str:
+            del limit, account
+            if upstream_mode == "error-result":
+                raise RuntimeError("private upstream detail")
+            return "An error occurred (code: TEST_PRIVATE_DETAIL)"
+    
+        adapter = TelegramAdapter(Path("unused.env"))
+        adapter._server = server
+    
+>       with pytest.raises(ProviderError, match="embedded Telegram tool returned an error"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'embedded Telegram tool returned an error'
+E         Actual message: 'embedded Telegram runtime secret is incomplete: TELEGRAM_API_HASH, TELEGRAM_API_ID, TELEGRAM_SESSION_STRING'
+
+tests\providers\test_provider_contracts.py:132: AssertionError
+_ test_telegram_adapter_fails_closed_on_embedded_upstream_errors[error-string] _
+
+upstream_mode = 'error-string'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("upstream_mode", ["error-result", "error-string"])
+    async def test_telegram_adapter_fails_closed_on_embedded_upstream_errors(
+        upstream_mode: str,
+    ) -> None:
+        server = FastMCP1("telegram-error-fixture")
+    
+        @server.tool()
+        async def list_chats(limit: int = 20, account: str | None = None) -> str:
+            del limit, account
+            if upstream_mode == "error-result":
+                raise RuntimeError("private upstream detail")
+            return "An error occurred (code: TEST_PRIVATE_DETAIL)"
+    
+        adapter = TelegramAdapter(Path("unused.env"))
+        adapter._server = server
+    
+>       with pytest.raises(ProviderError, match="embedded Telegram tool returned an error"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'embedded Telegram tool returned an error'
+E         Actual message: 'embedded Telegram runtime secret is incomplete: TELEGRAM_API_HASH, TELEGRAM_API_ID, TELEGRAM_SESSION_STRING'
+
+tests\providers\test_provider_contracts.py:132: AssertionError
+______ test_upstream_tool_error_reason_survives_into_the_provider_error _______
+
+tmp_path = WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3939/test_upstream_tool_error_reaso0')
+
+    @pytest.mark.asyncio
+    async def test_upstream_tool_error_reason_survives_into_the_provider_error(
+        tmp_path: Path,
+    ) -> None:
+        stub = FastMCP("telegram-tool-error")
+    
+        @stub.tool(name="get_chat")
+        async def get_chat(chat_id: str, account: str) -> str:
+            raise ToolError("unexpected keyword argument 'limit'")
+    
+        adapter = _adapter(tmp_path)
+    
+        async def embedded() -> Any:
+            return stub
+    
+        adapter._embedded_server = embedded  # type: ignore[method-assign]
+    
+        with pytest.raises(ProviderError) as excinfo:
+            await adapter.call("telegram_get_chat", {"account": "default", "chat_id": "101"})
+    
+        # The reason reaches the log and the cause chain. It is deliberately not
+        # part of the client envelope, which safe_provider_error builds from the
+        # error class alone.
+        assert "limit" in str(excinfo.value)
+>       assert excinfo.value.__cause__ is not None
+E       assert None is not None
+E        +  where None = ProviderError("embedded Telegram tool returned an error: unexpected keyword argument 'limit'").__cause__
+E        +    where ProviderError("embedded Telegram tool returned an error: unexpected keyword argument 'limit'") = <ExceptionInfo ProviderError("embedded Telegram tool returned an error: unexpected keyword argument 'limit'") tblen=2>.value
+
+tests\providers\test_telegram_contract_regressions.py:320: AssertionError
+---------------------------- Captured stderr call -----------------------------
+                    Error calling tool 'get_chat'                              
+------------------------------ Captured log call ------------------------------
+ERROR    fastmcp.server.server:server.py:1508 Error calling tool 'get_chat'
+______________ test_typed_provider_errors_pass_through_unchanged ______________
+
+tmp_path = WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3939/test_typed_provider_errors_pas0')
+
+    async def test_typed_provider_errors_pass_through_unchanged(tmp_path: Path) -> None:
+        adapter = _adapter(tmp_path)
+        _fail_with(adapter, ProviderError("embedded Telegram runtime secret is incomplete"))
+>       with pytest.raises(ProviderError, match="secret is incomplete"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'secret is incomplete'
+E         Actual message: 'embedded Telegram runtime failed'
+
+tests\providers\test_telegram_runtime_errors.py:83: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/contract/test_schema_boundary.py::test_telegram_runtime_is_embedded_without_sidecar
+FAILED tests/providers/test_provider_contracts.py::test_telegram_adapter_uses_embedded_mcp_transport
+FAILED tests/providers/test_provider_contracts.py::test_telegram_adapter_fails_closed_on_embedded_upstream_errors[error-result]
+FAILED tests/providers/test_provider_contracts.py::test_telegram_adapter_fails_closed_on_embedded_upstream_errors[error-string]
+FAILED tests/providers/test_telegram_contract_regressions.py::test_upstream_tool_error_reason_survives_into_the_provider_error
+FAILED tests/providers/test_telegram_runtime_errors.py::test_typed_provider_errors_pass_through_unchanged
+6 failed, 70 passed, 541 deselected in 10.32s
+{"exit_code": 1, "seconds": 16.891}

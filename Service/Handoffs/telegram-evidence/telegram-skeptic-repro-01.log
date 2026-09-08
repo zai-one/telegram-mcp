@@ -1,0 +1,32 @@
+{"command": ["D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe", "-m", "pytest", "tests/test_skeptic_regressions.py", "-q"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+F                                                                        [100%]
+================================== FAILURES ===================================
+___ test_known_local_quota_denial_can_be_retried_with_new_key_after_window ____
+
+config = ServiceConfig(state_path=WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3935/test_known_local_q...=True, enabled=True, rate_limit=30, write_rate_limit=20, telegram_high_risk_rate_limit_per_minute=3, max_concurrency=2)
+
+    async def test_known_local_quota_denial_can_be_retried_with_new_key_after_window(config):
+        settings = replace(config, write_rate_limit=1)
+        adapter = FixtureAdapter()
+        async with Client(create_server(settings, transport="stdio", adapter=adapter)) as client:
+            await client.call_tool("telegram_send_message", {**SEND, "message": "first", "idempotency_key": "first"})
+            with pytest.raises(ToolError, match="provider_rate_limited"):
+                await client.call_tool("telegram_send_message", SEND)
+        assert len(adapter.calls) == 1
+        store = StateStore(settings)
+        rows = await store.telegram_write_list("local-operator", idempotency_keys=["stable"])
+>       assert rows[0]["status"] == "failed"
+E       AssertionError: assert 'pending' == 'failed'
+E         
+E         - failed
+E         + pending
+
+tests\test_skeptic_regressions.py:22: AssertionError
+---------------------------- Captured stderr call -----------------------------
+[09/08/26 12:48:50] Error calling tool 'telegram_send_message'                 
+------------------------------ Captured log call ------------------------------
+ERROR    fastmcp.server.server:server.py:1508 Error calling tool 'telegram_send_message'
+=========================== short test summary info ===========================
+FAILED tests/test_skeptic_regressions.py::test_known_local_quota_denial_can_be_retried_with_new_key_after_window
+1 failed in 5.26s
+{"exit_code": 1, "seconds": 7.266}

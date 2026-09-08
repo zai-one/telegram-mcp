@@ -1,0 +1,6 @@
+{"command": ["uv", "build"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+Building source distribution...
+Building wheel from source distribution...
+Successfully built dist\zai_telegram_mcp-0.1.0.tar.gz
+Successfully built dist\zai_telegram_mcp-0.1.0-py3-none-any.whl
+{"exit_code": 0, "seconds": 7.203}

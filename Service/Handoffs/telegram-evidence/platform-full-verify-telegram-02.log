@@ -1,0 +1,53 @@
+{"command": ["uv", "run", "mcp-platform-verify"], "cwd": "D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction"}
+All checks passed!
+Success: no issues found in 44 source files
+........................................................................ [ 11%]
+........................................................................ [ 23%]
+..............sss....................................................... [ 34%]
+........................................................................ [ 46%]
+................................................................ss.....s [ 57%]
+s...............s....................................................... [ 69%]
+........................................................................ [ 80%]
+........................................................................ [ 92%]
+..................................................                       [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] tests\ops\test_passbolt_out_file_consumer.py:32: POSIX owner and permission bits are required
+SKIPPED [1] tests\ops\test_passbolt_out_file_consumer.py:45: POSIX owner and permission bits are required
+SKIPPED [1] tests\ops\test_passbolt_out_file_consumer.py:58: POSIX owner and permission bits are required
+SKIPPED [1] tests\providers\test_passbolt.py:316: POSIX permission bits are required
+SKIPPED [1] tests\providers\test_passbolt.py:328: POSIX symlink behavior is required
+SKIPPED [1] tests\providers\test_passbolt.py:473: POSIX permission bits are required
+SKIPPED [1] tests\providers\test_passbolt.py:493: POSIX symlink behavior is required
+SKIPPED [1] tests\providers\test_passbolt.py:1113: POSIX permission bits are required
+618 passed, 8 skipped in 135.27s (0:02:15)
+PASS secret scan findings=0 (clean)
+PASS all direct Python dependencies exactly pinned
+PASS Docker base image exact reference pinned
+PASS container package installer pinned
+PASS migration fixture image digest pinned
+PASS schema-scoped restore CI fixture defined
+PASS Compose validation image digest pinned
+PASS Buildah image digest pinned
+PASS Syft release and archive checksum pinned
+PASS Grype release and archive checksum pinned
+PASS Docker build context excludes VCS, non-pinned build residue and secrets
+PASS R2 runner concurrency and executor bounded
+PASS R2 runner image allowlist exact and services denied
+PASS R2 runner privilege and host-socket boundaries
+PASS R2 seccomp base and exact user-namespace rule pinned
+PASS migration foreign/global mutation patterns=0
+PASS migration objects schema-qualified
+PASS each migration is one explicit transaction
+PASS schema restore is custom-format, owned-only and fixture-restricted
+PASS Compose service allowlist
+PASS no local PostgreSQL or Redis service
+PASS app bind matches approved architecture
+PASS Knowledge runtime embedded in app with app-only database credential
+PASS Telegram runtime embedded in FastMCP image without HTTP sidecar
+PASS Telegram pinned package upstream provenance and per-file integrity verified offline
+PASS Docker unavailable (allowed unless --require-docker)
+PASS ruff check src tests scripts
+PASS mypy src/mcp_platform
+PASS pytest -q
+SUMMARY errors=0
+{"exit_code": 0, "seconds": 151.844}

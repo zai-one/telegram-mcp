@@ -1,0 +1,63 @@
+{
+  "passed": true,
+  "worktrees": [
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "C:/Users/codex/Documents/Codex/2026-07-23/2/work/telegram-group-search-r1",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "C:/Users/codex/Documents/Codex/2026-07-23/2/work/telegram-join-surface-r1",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-arsenkin-deploy-20260721",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-capability-kernel",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-fastmcp4-canary-20260901",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-passbolt-r3-arsenkin-429",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-roistat-r1",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-topvisor-full-r1",
+      "unchanged": true,
+      "changed_fields": []
+    },
+    {
+      "worktree": "D:/ZAI/Infra/mcp-platform-webmaster-v1",
+      "unchanged": true,
+      "changed_fields": []
+    }
+  ],
+  "added_worktrees": [
+    "D:/ZAI/Infra/mcp-platform-roistat-services-extraction",
+    "D:/ZAI/Infra/mcp-platform-services-extraction",
+    "D:/ZAI/Infra/mcp-platform-telegram-services-extraction",
+    "D:/ZAI/Infra/mcp-platform-webmaster-services-extraction"
+  ],
+  "changed_existing_refs": [],
+  "remotes_unchanged": true
+}

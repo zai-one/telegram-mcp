@@ -1,0 +1,125 @@
+{"command": ["python", "D:\\ZAI\\.tasks\\work\\mcp-services-extraction\\verify_gateway_clone.py", "--source", "D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction", "--branch", "codex/telegram-service-extraction", "--revision", "f76ab183218455b4abddec421c45ece0f00b4fbc", "--destination-name", "telegram-clean-gateway-clone-01", "--test-keyword", "telegram"], "cwd": "D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction"}
+Cloning into 'D:\ZAI\.tasks\work\mcp-services-extraction\telegram-clean-gateway-clone-01'...
+done.
+Prepared 1 pinned service wheels
+Using CPython 3.12.13 interpreter at: D:\ZAI\Infra\mcp-platform\.venv\Scripts\python.exe
+Creating virtual environment at: .venv
+Activate with: .venv\Scripts\activate
+   Building zai-mcp-platform @ file:///D:/ZAI/.tasks/work/mcp-services-extraction/telegram-clean-gateway-clone-01
+      Built zai-mcp-platform @ file:///D:/ZAI/.tasks/work/mcp-services-extraction/telegram-clean-gateway-clone-01
+Prepared 2 packages in 2.76s
+warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+         If the cache and target directories are on different filesystems, hardlinking may not be supported.
+         If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+Installed 102 packages in 7.42s
+ + aiofile==3.11.1
+ + annotated-types==0.7.0
+ + anyio==4.14.2
+ + ast-serialize==0.6.0
+ + asyncpg==0.31.0
+ + attrs==26.1.0
+ + authlib==1.7.2
+ + beartype==0.22.9
+ + cachetools==7.1.4
+ + caio==0.9.25
+ + certifi==2026.6.17
+ + cffi==2.1.0
+ + cfgv==3.5.0
+ + click==8.4.2
+ + colorama==0.4.6
+ + cryptography==50.0.0
+ + cyclopts==4.21.0
+ + distlib==0.4.3
+ + dnspython==2.8.0
+ + docstring-parser==0.18.0
+ + email-validator==2.3.0
+ + exceptiongroup==1.3.1
+ + fastmcp==4.0.0
+ + fastmcp-slim==4.0.0
+ + filelock==3.30.0
+ + griffelib==2.1.0
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httpcore2==2.12.0
+ + httpx==0.28.1
+ + httpx2==2.12.0
+ + identify==2.6.19
+ + idna==3.18
+ + iniconfig==2.3.0
+ + jaraco-classes==3.4.0
+ + jaraco-context==6.1.2
+ + jaraco-functools==4.6.0
+ + jinja2==3.1.6
+ + joserfc==1.7.3
+ + jsonref==1.1.0
+ + jsonschema==4.26.0
+ + jsonschema-path==0.5.0
+ + jsonschema-specifications==2025.9.1
+ + keyring==25.7.0
+ + librt==0.13.0
+ + markdown-it-py==4.2.0
+ + markupsafe==3.0.3
+ + mcp==2.1.1
+ + mcp-types==2.1.1
+ + mdurl==0.1.2
+ + more-itertools==11.1.0
+ + mypy==2.3.0
+ + mypy-extensions==1.1.0
+ + nest-asyncio==1.6.0
+ + nodeenv==1.10.0
+ + openapi-pydantic==0.5.1
+ + opentelemetry-api==1.43.0
+ + packaging==26.2
+ + pathable==0.6.0
+ + pathspec==1.1.1
+ + platformdirs==4.10.0
+ + pluggy==1.6.0
+ + pre-commit==4.6.0
+ + py-key-value-aio==0.4.5
+ + pyaes==1.6.1
+ + pyasn1==0.6.4
+ + pycparser==3.0
+ + pydantic==2.13.4
+ + pydantic-core==2.46.4
+ + pydantic-settings==2.14.2
+ + pygments==2.20.0
+ + pyjwt==2.13.0
+ + pyperclip==1.11.0
+ + pytest==9.1.1
+ + pytest-asyncio==1.4.0
+ + python-discovery==1.4.4
+ + python-dotenv==1.2.2
+ + python-json-logger==3.3.0
+ + python-multipart==0.0.32
+ + pywin32==312
+ + pywin32-ctypes==0.2.3
+ + pyyaml==6.0.3
+ + qrcode==8.2
+ + referencing==0.37.0
+ + rich==15.0.0
+ + rich-rst==2.1.0
+ + rpds-py==2026.6.3
+ + rsa==4.9.1
+ + ruff==0.15.21
+ + sse-starlette==3.4.5
+ + starlette==1.3.1
+ + telethon==1.44.0
+ + truststore==0.10.4
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.2
+ + uncalled-for==0.4.0
+ + uvicorn==0.51.0
+ + virtualenv==21.6.1
+ + watchfiles==1.2.0
+ + websockets==16.1
+ + zai-mcp-platform==0.2.0 (from file:///D:/ZAI/.tasks/work/mcp-services-extraction/telegram-clean-gateway-clone-01)
+ + zai-telegram-mcp==0.1.0 (from file:///D:/ZAI/.tasks/work/mcp-services-extraction/telegram-clean-gateway-clone-01/.build/services/zai_telegram_mcp-0.1.0-py3-none-any.whl)
+........................................................................ [ 84%]
+.............                                                            [100%]
+85 passed, 541 deselected in 28.72s
+Building source distribution...
+Building wheel from source distribution...
+Successfully built dist\zai_mcp_platform-0.2.0.tar.gz
+Successfully built dist\zai_mcp_platform-0.2.0-py3-none-any.whl
+PASS clean clone, exact commit, explicit pinned wheel, frozen install, targeted tests and build
+{"exit_code": 0, "seconds": 71.828}

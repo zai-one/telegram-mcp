@@ -1,0 +1,5 @@
+{"command": ["uv", "run", "python", "scripts/verify.py"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+All checks passed!
+...............                                                          [100%]
+15 passed in 19.01s
+{"exit_code": 0, "seconds": 24.563}

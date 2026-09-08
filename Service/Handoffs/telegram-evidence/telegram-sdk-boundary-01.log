@@ -1,0 +1,4 @@
+{"command": ["D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe", "-m", "pytest", "tests/test_cancellation_and_sdk.py", "-q"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+...                                                                      [100%]
+3 passed in 7.54s
+{"exit_code": 0, "seconds": 9.828}

@@ -1,0 +1,79 @@
+{"command": ["uv", "run", "mcp-platform-verify"], "cwd": "D:\\ZAI\\Infra\\mcp-platform-telegram-services-extraction"}
+   Building zai-mcp-platform @ file:///D:/ZAI/Infra/mcp-platform-telegram-services-extraction
+      Built zai-mcp-platform @ file:///D:/ZAI/Infra/mcp-platform-telegram-services-extraction
+Uninstalled 2 packages in 26ms
+warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+         If the cache and target directories are on different filesystems, hardlinking may not be supported.
+         If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+Installed 2 packages in 462ms
+All checks passed!
+Success: no issues found in 44 source files
+............................................................F........... [ 11%]
+........................................................................ [ 23%]
+..............sss....................................................... [ 34%]
+........................................................................ [ 46%]
+................................................................ss.....s [ 57%]
+s...............s....................................................... [ 69%]
+........................................................................ [ 80%]
+........................................................................ [ 92%]
+..................................................                       [100%]
+================================== FAILURES ===================================
+_________________ test_every_tool_has_an_explicit_cost_class __________________
+
+    def test_every_tool_has_an_explicit_cost_class() -> None:
+        declared = _declared_tools()
+>       assert declared == set(TOOL_COST_CLASSES)
+E       AssertionError: assert {'arsenkin_ba..._result', ...} == {'arsenkin_ba..._result', ...}
+E         
+E         Extra items in the right set:
+E         'telegram_write'
+E         'telegram_resolve_recipient'
+E         'telegram_get_inbox'
+E         'telegram_get_messages'
+E         'telegram_get_conversation_context'...
+E         
+E         ...Full output truncated (8 lines hidden), use '-vv' to show
+
+tests\auth\test_tool_cost_registry.py:28: AssertionError
+=========================== short test summary info ===========================
+SKIPPED [1] tests\ops\test_passbolt_out_file_consumer.py:32: POSIX owner and permission bits are required
+SKIPPED [1] tests\ops\test_passbolt_out_file_consumer.py:45: POSIX owner and permission bits are required
+SKIPPED [1] tests\ops\test_passbolt_out_file_consumer.py:58: POSIX owner and permission bits are required
+SKIPPED [1] tests\providers\test_passbolt.py:316: POSIX permission bits are required
+SKIPPED [1] tests\providers\test_passbolt.py:328: POSIX symlink behavior is required
+SKIPPED [1] tests\providers\test_passbolt.py:473: POSIX permission bits are required
+SKIPPED [1] tests\providers\test_passbolt.py:493: POSIX symlink behavior is required
+SKIPPED [1] tests\providers\test_passbolt.py:1113: POSIX permission bits are required
+FAILED tests/auth/test_tool_cost_registry.py::test_every_tool_has_an_explicit_cost_class
+1 failed, 617 passed, 8 skipped in 141.57s (0:02:21)
+PASS secret scan findings=0 (clean)
+PASS all direct Python dependencies exactly pinned
+PASS Docker base image exact reference pinned
+PASS container package installer pinned
+PASS migration fixture image digest pinned
+PASS schema-scoped restore CI fixture defined
+PASS Compose validation image digest pinned
+PASS Buildah image digest pinned
+PASS Syft release and archive checksum pinned
+PASS Grype release and archive checksum pinned
+PASS Docker build context excludes VCS, non-pinned build residue and secrets
+PASS R2 runner concurrency and executor bounded
+PASS R2 runner image allowlist exact and services denied
+PASS R2 runner privilege and host-socket boundaries
+PASS R2 seccomp base and exact user-namespace rule pinned
+PASS migration foreign/global mutation patterns=0
+PASS migration objects schema-qualified
+PASS each migration is one explicit transaction
+PASS schema restore is custom-format, owned-only and fixture-restricted
+PASS Compose service allowlist
+PASS no local PostgreSQL or Redis service
+PASS app bind matches approved architecture
+PASS Knowledge runtime embedded in app with app-only database credential
+PASS Telegram runtime embedded in FastMCP image without HTTP sidecar
+PASS Telegram pinned package upstream provenance and per-file integrity verified offline
+PASS Docker unavailable (allowed unless --require-docker)
+PASS ruff check src tests scripts
+PASS mypy src/mcp_platform
+FAIL pytest -q
+SUMMARY errors=1
+{"exit_code": 1, "seconds": 168.219}

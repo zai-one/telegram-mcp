@@ -1,0 +1,218 @@
+{"command": ["D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe", "scripts/verify.py"], "cwd": "D:\\ZAI\\MCP\\Telegram"}
+All checks passed!
+...........................F...FF.                                       [100%]
+================================== FAILURES ===================================
+_________ test_real_stdio_discovers_without_loading_telegram_sessions _________
+
+config = ServiceConfig(state_path=WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3933/test_real_stdio_di...=True, enabled=True, rate_limit=30, write_rate_limit=20, telegram_high_risk_rate_limit_per_minute=3, max_concurrency=2)
+tmp_path = WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3933/test_real_stdio_discovers_with0')
+
+    async def test_real_stdio_discovers_without_loading_telegram_sessions(config, tmp_path):
+        bindings = tmp_path / "bindings.json"
+        bindings.write_text(json.dumps(dict(config.bindings)), encoding="utf-8")
+        bindings.chmod(0o600)
+        env = {
+            "TELEGRAM_STATE_PATH": str(tmp_path / "stdio.sqlite"),
+            "TELEGRAM_SECRET_FILE": str(config.secret_path),
+            "TELEGRAM_BINDINGS_FILE": str(bindings),
+        }
+        async with Client(StdioTransport(command=sys.executable, args=["-m", "zai_telegram"], env=env)) as client:
+>           assert len(await client.list_tools()) == 7
+E           AssertionError: assert 12 == 7
+E            +  where 12 = len([Tool(name='telegram_list_chats', title='Telegram List Chats', description='List Telegram chats through the embedded r...a={'additionalProperties': True, 'type': 'object'}, icons=None, annotations=None, meta={'fastmcp': {'tags': []}}), ...])
+
+tests\test_server.py:99: AssertionError
+____ test_real_pinned_upstream_loads_and_discovers_without_network[False] _____
+
+tmp_path = WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3933/test_real_pinned_upstream_load0')
+write = False
+
+    @pytest.mark.parametrize("write", [False, True])
+    def test_real_pinned_upstream_loads_and_discovers_without_network(tmp_path, write):
+        script = tmp_path / "offline_upstream.py"
+        script.write_text(
+            """
+    import asyncio
+    import socket
+    from pathlib import Path
+    from telethon.crypto import AuthKey
+    from telethon.sessions import StringSession
+    from fastmcp import Client
+    from zai_telegram.adapter import TelegramAdapter, TELEGRAM_WRITE_ALLOWLIST
+    
+    def deny(*args, **kwargs):
+        raise AssertionError("NO NETWORK allowed in upstream discovery")
+    socket.socket.connect = deny
+    socket.socket.connect_ex = deny
+    session = StringSession()
+    session.set_dc(2, "127.0.0.1", 443)
+    session.auth_key = AuthKey(data=b"\\x01" * 256)
+    secret = Path(__file__).with_suffix(".env")
+    secret.write_text("TELEGRAM_API_ID=12345\\nTELEGRAM_API_HASH=synthetic-api-hash\\n"
+                      "TELEGRAM_SESSION_STRING=" + session.save() + "\\n")
+    secret.chmod(0o600)
+    
+    async def main():
+        adapter = TelegramAdapter(secret, write_enabled=__WRITE_ENABLED__, strict_secret=True)
+        server = await adapter._embedded_server()
+        async with Client(server) as client:
+            tools = await client.list_tools()
+        names = {tool.name for tool in tools}
+        assert {"list_chats", "get_chat", "get_messages", "search_global"} <= names
+        writes = {tool.name for tool in tools if not tool.annotations or not tool.annotations.read_only_hint}
+        assert writes <= set(TELEGRAM_WRITE_ALLOWLIST)
+        assert bool(writes) == __WRITE_ENABLED__
+        assert "send_message" in names if __WRITE_ENABLED__ else "send_message" not in names
+        await adapter.close()
+        print("pinned upstream discovery passed", len(tools), "write", __WRITE_ENABLED__)
+    
+    asyncio.run(main())
+    """.replace("__WRITE_ENABLED__", str(write)),
+            encoding="utf-8",
+        )
+        result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=60)
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: Traceback (most recent call last):
+E           File "C:\Users\codex\AppData\Local\Temp\pytest-of-codex\pytest-3933\test_real_pinned_upstream_load0\offline_upstream.py", line 36, in <module>
+E             asyncio.run(main())
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 194, in run
+E             with Runner(debug=debug, loop_factory=loop_factory) as runner:
+E                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 58, in __enter__
+E             self._lazy_init()
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 137, in _lazy_init
+E             self._loop = events.new_event_loop()
+E                          ^^^^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\events.py", line 823, in new_event_loop
+E             return get_event_loop_policy().new_event_loop()
+E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\events.py", line 720, in new_event_loop
+E             return self._loop_factory()
+E                    ^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\windows_events.py", line 316, in __init__
+E             super().__init__(proactor)
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 640, in __init__
+E             self._make_self_pipe()
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 787, in _make_self_pipe
+E             self._ssock, self._csock = socket.socketpair()
+E                                        ^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\socket.py", line 623, in _fallback_socketpair
+E             csock.connect((addr, port))
+E           File "C:\Users\codex\AppData\Local\Temp\pytest-of-codex\pytest-3933\test_real_pinned_upstream_load0\offline_upstream.py", line 11, in deny
+E             raise AssertionError("NO NETWORK allowed in upstream discovery")
+E         AssertionError: NO NETWORK allowed in upstream discovery
+E         sys:1: RuntimeWarning: coroutine 'main' was never awaited
+E         Exception ignored in: <function BaseEventLoop.__del__ at 0x000002880F01B4C0>
+E         Traceback (most recent call last):
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\base_events.py", line 732, in __del__
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 697, in close
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 779, in _close_self_pipe
+E         AttributeError: 'ProactorEventLoop' object has no attribute '_ssock'
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe', 'C:\\Users\\codex\\AppData\\Local\\Temp\\...events.py", line 779, in _close_self_pipe\nAttributeError: \'ProactorEventLoop\' object has no attribute \'_ssock\'\n').returncode
+
+tests\test_vendor.py:109: AssertionError
+_____ test_real_pinned_upstream_loads_and_discovers_without_network[True] _____
+
+tmp_path = WindowsPath('C:/Users/codex/AppData/Local/Temp/pytest-of-codex/pytest-3933/test_real_pinned_upstream_load1')
+write = True
+
+    @pytest.mark.parametrize("write", [False, True])
+    def test_real_pinned_upstream_loads_and_discovers_without_network(tmp_path, write):
+        script = tmp_path / "offline_upstream.py"
+        script.write_text(
+            """
+    import asyncio
+    import socket
+    from pathlib import Path
+    from telethon.crypto import AuthKey
+    from telethon.sessions import StringSession
+    from fastmcp import Client
+    from zai_telegram.adapter import TelegramAdapter, TELEGRAM_WRITE_ALLOWLIST
+    
+    def deny(*args, **kwargs):
+        raise AssertionError("NO NETWORK allowed in upstream discovery")
+    socket.socket.connect = deny
+    socket.socket.connect_ex = deny
+    session = StringSession()
+    session.set_dc(2, "127.0.0.1", 443)
+    session.auth_key = AuthKey(data=b"\\x01" * 256)
+    secret = Path(__file__).with_suffix(".env")
+    secret.write_text("TELEGRAM_API_ID=12345\\nTELEGRAM_API_HASH=synthetic-api-hash\\n"
+                      "TELEGRAM_SESSION_STRING=" + session.save() + "\\n")
+    secret.chmod(0o600)
+    
+    async def main():
+        adapter = TelegramAdapter(secret, write_enabled=__WRITE_ENABLED__, strict_secret=True)
+        server = await adapter._embedded_server()
+        async with Client(server) as client:
+            tools = await client.list_tools()
+        names = {tool.name for tool in tools}
+        assert {"list_chats", "get_chat", "get_messages", "search_global"} <= names
+        writes = {tool.name for tool in tools if not tool.annotations or not tool.annotations.read_only_hint}
+        assert writes <= set(TELEGRAM_WRITE_ALLOWLIST)
+        assert bool(writes) == __WRITE_ENABLED__
+        assert "send_message" in names if __WRITE_ENABLED__ else "send_message" not in names
+        await adapter.close()
+        print("pinned upstream discovery passed", len(tools), "write", __WRITE_ENABLED__)
+    
+    asyncio.run(main())
+    """.replace("__WRITE_ENABLED__", str(write)),
+            encoding="utf-8",
+        )
+        result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=60)
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: Traceback (most recent call last):
+E           File "C:\Users\codex\AppData\Local\Temp\pytest-of-codex\pytest-3933\test_real_pinned_upstream_load1\offline_upstream.py", line 36, in <module>
+E             asyncio.run(main())
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 194, in run
+E             with Runner(debug=debug, loop_factory=loop_factory) as runner:
+E                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 58, in __enter__
+E             self._lazy_init()
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 137, in _lazy_init
+E             self._loop = events.new_event_loop()
+E                          ^^^^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\events.py", line 823, in new_event_loop
+E             return get_event_loop_policy().new_event_loop()
+E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\events.py", line 720, in new_event_loop
+E             return self._loop_factory()
+E                    ^^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\windows_events.py", line 316, in __init__
+E             super().__init__(proactor)
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 640, in __init__
+E             self._make_self_pipe()
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 787, in _make_self_pipe
+E             self._ssock, self._csock = socket.socketpair()
+E                                        ^^^^^^^^^^^^^^^^^^^
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\socket.py", line 623, in _fallback_socketpair
+E             csock.connect((addr, port))
+E           File "C:\Users\codex\AppData\Local\Temp\pytest-of-codex\pytest-3933\test_real_pinned_upstream_load1\offline_upstream.py", line 11, in deny
+E             raise AssertionError("NO NETWORK allowed in upstream discovery")
+E         AssertionError: NO NETWORK allowed in upstream discovery
+E         sys:1: RuntimeWarning: coroutine 'main' was never awaited
+E         Exception ignored in: <function BaseEventLoop.__del__ at 0x000001A0FFA9B4C0>
+E         Traceback (most recent call last):
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\base_events.py", line 732, in __del__
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 697, in close
+E           File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\proactor_events.py", line 779, in _close_self_pipe
+E         AttributeError: 'ProactorEventLoop' object has no attribute '_ssock'
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe', 'C:\\Users\\codex\\AppData\\Local\\Temp\\...events.py", line 779, in _close_self_pipe\nAttributeError: \'ProactorEventLoop\' object has no attribute \'_ssock\'\n').returncode
+
+tests\test_vendor.py:109: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_server.py::test_real_stdio_discovers_without_loading_telegram_sessions
+FAILED tests/test_vendor.py::test_real_pinned_upstream_loads_and_discovers_without_network[False]
+FAILED tests/test_vendor.py::test_real_pinned_upstream_loads_and_discovers_without_network[True]
+3 failed, 31 passed in 32.39s
+Traceback (most recent call last):
+  File "D:\ZAI\MCP\Telegram\scripts\verify.py", line 8, in <module>
+    subprocess.run(command, check=True)
+  File "C:\Users\codex\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['D:\\ZAI\\MCP\\Telegram\\.venv\\Scripts\\python.exe', '-m', 'pytest', '-q']' returned non-zero exit status 1.
+{"exit_code": 1, "seconds": 35.297}

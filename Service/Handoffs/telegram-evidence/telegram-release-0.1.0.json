@@ -1,0 +1,11 @@
+{
+  "package": "zai-telegram-mcp",
+  "version": "0.1.0",
+  "wheel": "zai_telegram_mcp-0.1.0-py3-none-any.whl",
+  "source_revision": "7b4b7425edbe7337a564bb44c27e78290f42a2d2",
+  "sha256": "db2398c5a5d319dcb85a1636c54e646fdb5d8d435858aceb3627e4e17b0bfec1",
+  "uv_lock_sha256": "17245573d614c299666e1a5f2fe343333d00ce088d20c4129250a855ba80a87e",
+  "verification": "clean non-editable wheel; hashed frozen dependencies; real stdio and HTTP",
+  "production": "not deployed",
+  "container": "not built; Docker unavailable"
+}

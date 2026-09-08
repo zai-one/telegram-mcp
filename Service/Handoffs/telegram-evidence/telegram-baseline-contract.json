@@ -1,0 +1,422 @@
+{
+  "gateway_revision": "f1a27960405bc73ca790d5d2694b47ad8c3a77b3",
+  "method": "authenticated discovery only; no provider data API",
+  "tools": {
+    "telegram_list_chats": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 20,
+            "type": "integer"
+          },
+          "chat_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "unread_only": {
+            "default": false,
+            "type": "boolean"
+          },
+          "unmuted_only": {
+            "default": false,
+            "type": "boolean"
+          },
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "with_about": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "outputSchema": null,
+      "description": "List Telegram chats through the embedded read-only runtime."
+    },
+    "telegram_get_inbox": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 20,
+            "type": "integer"
+          },
+          "unread_only": {
+            "default": true,
+            "type": "boolean"
+          },
+          "unmuted_only": {
+            "default": false,
+            "type": "boolean"
+          },
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false
+          },
+          "chat_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        }
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "description": "Return a side-effect-free inbox snapshot; never marks messages read."
+    },
+    "telegram_search_messages": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "chat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "outputSchema": null,
+      "description": "Search Telegram messages without exposing write operations."
+    },
+    "telegram_get_messages": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 20,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chat_id"
+        ]
+      },
+      "outputSchema": null,
+      "description": "Get a bounded page of messages from a Telegram chat."
+    },
+    "telegram_get_chat": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat_id"
+        ]
+      },
+      "outputSchema": null,
+      "description": "Get safe metadata for one Telegram chat."
+    },
+    "telegram_get_conversation_context": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chat_id"
+        ]
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "description": "Return normalized chat metadata and chronological message envelopes."
+    },
+    "telegram_resolve_recipient": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer"
+          },
+          "include_public": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "description": "Resolve a recipient fail-closed; partial or multiple matches stay ambiguous."
+    },
+    "telegram_send_message": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "parse_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "chat_id",
+          "message"
+        ]
+      },
+      "outputSchema": null,
+      "description": "Send a Telegram message autonomously (idempotent, audited)."
+    },
+    "telegram_reply_to_message": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          },
+          "parse_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "chat_id",
+          "message_id",
+          "text"
+        ]
+      },
+      "outputSchema": null,
+      "description": "Reply to a Telegram message in a dialog (idempotent, audited)."
+    },
+    "telegram_send_many": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch_id",
+          "items"
+        ]
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "description": "Send 1..20 independently idempotent messages to resolved recipients."
+    },
+    "telegram_outbox_status": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "idempotency_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          }
+        }
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "description": "Read the authenticated principal's durable Telegram delivery ledger."
+    },
+    "telegram_write": {
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "tool",
+          "arguments"
+        ]
+      },
+      "outputSchema": null,
+      "description": "Run any allowlisted Telegram write tool by name (idempotent, audited).\n\n`tool` must be an entry in the frozen platform write allowlist; unknown\nor non-allowlisted names are refused. `arguments` are the upstream tool\nparameters minus `account`, which the platform injects from the\nprincipal binding."
+    }
+  }
+}
