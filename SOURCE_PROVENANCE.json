@@ -1,0 +1,149 @@
+{
+  "source_repository": "git@git.zai.one:zai.one/mcp-platform.git",
+  "source_revision": "f1a27960405bc73ca790d5d2694b47ad8c3a77b3",
+  "runtime_status": "local independent runtime candidate; no publication or live deployment",
+  "files": [
+    {
+      "source": "src/mcp_platform/providers/telegram.py",
+      "destination": "src/zai_telegram/adapter.py",
+      "source_sha256": "e93c58c2f0003f6f09cc2260ef2ed627d722b319a26824414edd23f78bd61f75",
+      "initial_extracted_sha256": "8c83d0ac40895238d54c9d850ffea6b7c28beed5ff4a474bcf4e2d5d33400e67"
+    },
+    {
+      "source": "src/mcp_platform/providers/base.py",
+      "destination": "src/zai_telegram/transport.py",
+      "source_sha256": "df809567bbf609f73cd8f1a9507272aff3a202666a75b54a186091235817d2c3",
+      "initial_extracted_sha256": "3803d996e019e4852e69770092567e2aeae0f6c6dca94a93576cc326bd35e051"
+    },
+    {
+      "source": "src/mcp_platform/secrets.py",
+      "destination": "src/zai_telegram/secrets.py",
+      "source_sha256": "72d6c9211451848a37fa56b976687bc7d980e8486cadcace7baeb99b65783b53",
+      "initial_extracted_sha256": "72d6c9211451848a37fa56b976687bc7d980e8486cadcace7baeb99b65783b53"
+    },
+    {
+      "source": "src/mcp_platform/error_envelope.py",
+      "destination": "src/zai_telegram/errors.py",
+      "source_sha256": "c5ac994b93383c4f5dca52695316a4fbe50df48c2b2cd6021747b407061e9a3e",
+      "initial_extracted_sha256": "eb76da50778a639dff4e839e59ebbe3dc53dcf94c0f6b5382cbff43d85f71db7"
+    },
+    {
+      "source": "src/mcp_platform/response_sanitizer.py",
+      "destination": "src/zai_telegram/sanitizer.py",
+      "source_sha256": "8682ff32b5108b2f8f6fe667af0d85d40f6d6b9dada596a15a6629be07e5cecd",
+      "initial_extracted_sha256": "8682ff32b5108b2f8f6fe667af0d85d40f6d6b9dada596a15a6629be07e5cecd"
+    },
+    {
+      "source": "tests/test_response_sanitizer.py",
+      "destination": "tests/test_sanitizer.py",
+      "source_sha256": "e2ed7b37e992bd6e6aec15729aa518b20637d49eddc91e0dd0003d341ccedeb5",
+      "initial_extracted_sha256": "0f1950314a0306d7b76324a36f9b3fe7ce60ebc199e0a068a32c42bd5f194459"
+    },
+    {
+      "source": "tests/providers/test_telegram_runtime_errors.py",
+      "destination": "tests/test_adapter_runtime_errors.py",
+      "source_sha256": "98a96f6a394f3bbeea3d6ee15bfee8fb012cc9ae884ba0100915f5872df2b01c",
+      "initial_extracted_sha256": "f1a3133ffc2965aaf51395a8b21c6db8583af0ab1b16c710ebc96fa147b23702"
+    },
+    {
+      "source": "vendor/telegram-mcp.pin",
+      "destination": "vendor/telegram-mcp.pin",
+      "source_sha256": "82e9cada5fe91819924a0640ffb772ded5be0198e04e76b6bd4088b331b491b0",
+      "initial_extracted_sha256": "82e9cada5fe91819924a0640ffb772ded5be0198e04e76b6bd4088b331b491b0"
+    },
+    {
+      "source": "vendor/patches/telegram-mcp-v3.2.0-atg1.patch",
+      "destination": "vendor/patches/telegram-mcp-v3.2.0-atg1.patch",
+      "source_sha256": "e1e2d340f0fd79092bd641212fe4c840e8b3902cfae5b7e73346a1e33bd92fed",
+      "initial_extracted_sha256": "e1e2d340f0fd79092bd641212fe4c840e8b3902cfae5b7e73346a1e33bd92fed"
+    }
+  ],
+  "functions": [
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "_telegram_call",
+      "source_sha256": "1b59ebee98f10abcd60f8f71f00150e1084cfbe641f20cb495d735e5912bf6d8"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "_telegram_write",
+      "source_sha256": "5a9b4f8e7a7c3df59bc503021e76884615f8bfc68c5a3797e2545a5245769da9"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_list_chats",
+      "source_sha256": "974f60dca86c117f3c47a314805533bd4f83628f4a9d1de6888a264522e39c4f"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_get_inbox",
+      "source_sha256": "98373864ac2e355ef38c6b6e3b5853a9de751add2f44d8608e0d09ec0bc942be"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_search_messages",
+      "source_sha256": "1e6c41806ec75d88c0a81e01f251cc4c28593afadf27f2fba80833739943cefb"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_get_messages",
+      "source_sha256": "12d46e5fc931c5e114472496a3c6f62cd6edc89f36342e440c5e3496379571df"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_get_chat",
+      "source_sha256": "8f6d30881048cac08a1a965921790888e0d4a488a87e0bb0bdfa27e411766e89"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_get_conversation_context",
+      "source_sha256": "d08228aad291e90b5e42a63c179acaf2b3a0a258148d26d2aacc67fb5e9fd1d5"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_resolve_recipient",
+      "source_sha256": "2690585d878ff6a051e8753e9d6b7fdd894af7c1a7f9cfee511551de20829728"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_send_message",
+      "source_sha256": "4bbc413ae82d498a4ca3017b8e30ea7e2430be18d2992882210bf336dd44fdf1"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_reply_to_message",
+      "source_sha256": "814b72e923715b349f67e5de4cd67f4aa8c865911d82af84046678f3ae6fb9b0"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_send_many",
+      "source_sha256": "6b82782d8f2f243802757559f61e8447b1321b9783dcaea5e128f0ba703466a2"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_outbox_status",
+      "source_sha256": "99c992e0127cdfb312aecc8b87a2f5858a8fbbce60b81c9b59f7f4e21aca2618"
+    },
+    {
+      "source": "src/mcp_platform/app.py",
+      "name": "telegram_write",
+      "source_sha256": "80e2d273189ec3ac724244263df9a1370e06c09899f6136ce69fef1da5642450"
+    }
+  ],
+  "upstream": {
+    "repo": "https://github.com/chigwell/telegram-mcp.git",
+    "commit": "f1a2d8e00a7f127bb7702655c58fdfcee7e73a5a",
+    "tag": "v3.2.0",
+    "metadata_version": "2.0.1",
+    "manifest": "src/zai_telegram/_vendor/manifest.json",
+    "license": "Apache-2.0",
+    "changes": "Existing platform patch plus namespace-only import rewrites; adapter verifies packaged hashes before loading."
+  },
+  "standalone_changes": [
+    "server-owned bindings and RS256/scopes; explicit stdio authorization",
+    "private SQLite outbox/quota/audit; pending unknown sends never resubmitted",
+    "known local pre-dispatch denials fail without weakening ambiguous-send protection",
+    "one credential fingerprint per embedded process; permitted env keys and private upstream namespace",
+    "original 12 MCP schemas/descriptions retained; central store policy injected separately"
+  ]
+}

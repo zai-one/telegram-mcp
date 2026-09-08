@@ -1,0 +1,74 @@
+{
+  "repo": "https://github.com/chigwell/telegram-mcp.git",
+  "commit": "f1a2d8e00a7f127bb7702655c58fdfcee7e73a5a",
+  "tag": "v3.2.0",
+  "upstream_distribution_version": "2.0.1",
+  "patch_sha256": "e1e2d340f0fd79092bd641212fe4c840e8b3902cfae5b7e73346a1e33bd92fed",
+  "namespace": "zai_telegram._vendor",
+  "files": {
+    "sanitize.py": {
+      "patched_upstream_sha256": "77788d09de2d102a24ce33e10e346c7e66acf9719964fa7f78f781c9740deff9",
+      "packaged_sha256": "77788d09de2d102a24ce33e10e346c7e66acf9719964fa7f78f781c9740deff9"
+    },
+    "telegram_mcp/__init__.py": {
+      "patched_upstream_sha256": "682c7ddf5e1a58f1a5ca5ef67cb1ee1b0918a3cdddf08a6d231fbdf6d5a2e228",
+      "packaged_sha256": "118eaeb3804b7e3c58fb0c416dca024a7d89fd4cbbd20053e22895f9f1dc7ded"
+    },
+    "telegram_mcp/client_identity.py": {
+      "patched_upstream_sha256": "17aefd189bec4b03e0f14af17737a61b4d421d3ccff593ae4bfe0c547218f3fa",
+      "packaged_sha256": "17aefd189bec4b03e0f14af17737a61b4d421d3ccff593ae4bfe0c547218f3fa"
+    },
+    "telegram_mcp/install_guard.py": {
+      "patched_upstream_sha256": "9f7d5dec1cec620d179a14d719800600da7bd4965007a0e2c2438110c5240656",
+      "packaged_sha256": "9f7d5dec1cec620d179a14d719800600da7bd4965007a0e2c2438110c5240656"
+    },
+    "telegram_mcp/runner.py": {
+      "patched_upstream_sha256": "5b207a639a8e0cf3278b919f4efcbe47cb5b1115e74f5ed6327f2eae996206a3",
+      "packaged_sha256": "e0e54cfdf2b62d006ae8b602030143d66abda3e74f16204cc64fd53e4f4b74fc"
+    },
+    "telegram_mcp/runtime.py": {
+      "patched_upstream_sha256": "152b71aec6d1ec179a53fe37dcefef67bd13aa0748d2906d576a4cd588722c80",
+      "packaged_sha256": "86387a4c443cc85021d1c5b03a86f3e79040754cdd8af94e5eb146adb46bd633"
+    },
+    "telegram_mcp/tools/__init__.py": {
+      "patched_upstream_sha256": "4d71f28a488475f40d4402bf6275b9d01f28af2f04c08093f64b7ca2aebdeeaa",
+      "packaged_sha256": "c40fb18fd1d587025a9522cbdb723f0bb2fd02aafbe816c0ecbfc9971e84c5e8"
+    },
+    "telegram_mcp/tools/accounts.py": {
+      "patched_upstream_sha256": "7049b52498b843fcc5e82cd52370152096546a8b31134adc7ccbe3c585010b43",
+      "packaged_sha256": "b7fd231a7ee87d3d20e2dcc6ebb16142af01993bbdbf68af589e95077320f4bd"
+    },
+    "telegram_mcp/tools/chats.py": {
+      "patched_upstream_sha256": "c14d3485860ccb2b0106fdc4d898380262df49f0a7396ed4789a0c60b4e61e39",
+      "packaged_sha256": "3e14db7a18a1d8a1c0e8fb01808e069a17c830b7849302fe1485e6db3ed5f448"
+    },
+    "telegram_mcp/tools/contacts.py": {
+      "patched_upstream_sha256": "af3fd633b89ef6b5e8b35871f46ce7adfa5fc70f32ff4119c909fa0a69de0e56",
+      "packaged_sha256": "1f02f2e471cecc7fc0e4a68f58c01cebce4231016e12983ba04d6d3a417c7f24"
+    },
+    "telegram_mcp/tools/events.py": {
+      "patched_upstream_sha256": "4160ed5963eaa8c8c7ca9003931e1beaea2e3619c6f2bd427c13c19fff0657e9",
+      "packaged_sha256": "4103c0fdf50a3ccb0495bf88e890c8417193b76bc67da036df70d4893e558e3d"
+    },
+    "telegram_mcp/tools/folders.py": {
+      "patched_upstream_sha256": "6a5b7af1405afe426461ec33b36a55cf5d9914a1254197824a2d3b2266361029",
+      "packaged_sha256": "3f153386d5a03aae0f9cca845c268302de4228bf8cb6041cfd554fc041492081"
+    },
+    "telegram_mcp/tools/groups.py": {
+      "patched_upstream_sha256": "c7d23abb6074ad625f934d68d6ea2761cdde3d4edb309cd6236ebd019dda6d02",
+      "packaged_sha256": "c6b163ffbb496116323ed14314159da65c6bb4d5761da1b7780fc800dd495fc8"
+    },
+    "telegram_mcp/tools/media.py": {
+      "patched_upstream_sha256": "30c8b17a2c44d1b1120278d2af358bdc69860e894d4a9a8ca067dad2af230b27",
+      "packaged_sha256": "41c6ad900f80bf7d53a2fefce10bcf4fb994b53770374f9ca21f0d402970c216"
+    },
+    "telegram_mcp/tools/messages.py": {
+      "patched_upstream_sha256": "912bdfcbee79c14fc4f1690cbd84f06470cc7d17fb088ed859a16284436e042d",
+      "packaged_sha256": "01e1e0f9bf3b351c2e19ad66ec3d1748d0efa2b522cfc5c5bb8a54138b5e0647"
+    },
+    "telegram_mcp/tools/profile.py": {
+      "patched_upstream_sha256": "07c5c7e472816a1176ba3c4e87894e904d9db6f250ffd2896321952aaf04f50e",
+      "packaged_sha256": "aca45d31d2f2d1ca8894ee2dbf0f785c3621d1d540bec1173d40c8d648ad8a44"
+    }
+  }
+}
