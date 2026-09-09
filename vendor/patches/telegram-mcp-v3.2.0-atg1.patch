@@ -1,0 +1,277 @@
+diff --git a/telegram_mcp/runtime.py b/telegram_mcp/runtime.py
+index 85ac73f..a37cc71 100644
+--- a/telegram_mcp/runtime.py
++++ b/telegram_mcp/runtime.py
+@@ -16,12 +16,18 @@ from urllib.parse import unquote, urlparse
+ # Third-party libraries
+ import nest_asyncio
+ from dotenv import load_dotenv
+-from mcp.server.fastmcp import FastMCP, Context
++from fastmcp import Context, FastMCP
++from fastmcp.server.middleware import Middleware
++from fastmcp.tools import Tool
+ from mcp.types import Annotations, TextContent, ToolAnnotations
+-from mcp.shared.exceptions import McpError
++from mcp.shared.exceptions import MCPError as McpError
+ from pythonjsonlogger import jsonlogger
+ from telethon import TelegramClient, functions, types, utils
+ from telethon.sessions import StringSession
++from telethon.network.connection.tcpabridged import ConnectionTcpAbridged
++from telethon.network.connection.tcpfull import ConnectionTcpFull
++from telethon.network.connection.tcpintermediate import ConnectionTcpIntermediate
++from telethon.network.connection.tcpobfuscated import ConnectionTcpObfuscated
+ from telethon.tl.types import (
+     User,
+     Chat,
+@@ -112,30 +117,23 @@ mcp = FastMCP("telegram")
+ _USER_AUDIENCE = Annotations(audience=["user"])
+ 
+ 
+-def _install_annotation_hook() -> None:
+-    from mcp.types import CallToolRequest, ServerResult, CallToolResult
+-
+-    original_handler = mcp._mcp_server.request_handlers[CallToolRequest]
+-
+-    async def annotated_handler(req):
+-        response = await original_handler(req)
+-        if isinstance(response, ServerResult) and isinstance(response.root, CallToolResult):
+-            content = response.root.content
+-            if content:
+-                response.root.content = [
+-                    (
+-                        block.model_copy(update={"annotations": _USER_AUDIENCE})
+-                        if isinstance(block, TextContent) and block.annotations is None
+-                        else block
+-                    )
+-                    for block in content
+-                ]
+-        return response
+-
+-    mcp._mcp_server.request_handlers[CallToolRequest] = annotated_handler
++class _UserAudienceMiddleware(Middleware):
++    async def on_call_tool(self, context, call_next):
++        result = await call_next(context)
++        content = getattr(result, "content", None)
++        if content:
++            result.content = [
++                (
++                    block.model_copy(update={"annotations": _USER_AUDIENCE})
++                    if isinstance(block, TextContent) and block.annotations is None
++                    else block
++                )
++                for block in content
++            ]
++        return result
+ 
+ 
+-_install_annotation_hook()
++mcp.add_middleware(_UserAudienceMiddleware())
+ 
+ 
+ _EXPOSED_TOOLS_MODES = {"all", "read-only"}
+@@ -164,10 +163,12 @@ def _apply_exposed_tools_mode(server: FastMCP = mcp, mode: Optional[str] = None)
+         return []
+ 
+     removed: list[str] = []
+-    for tool in list(server._tool_manager.list_tools()):
++    manager = server._local_provider
++    tools = [component for component in manager._components.values() if isinstance(component, Tool)]
++    for tool in tools:
+         annotations = getattr(tool, "annotations", None)
+-        if not getattr(annotations, "readOnlyHint", False):
++        if not getattr(annotations, "read_only_hint", False):
+-            server._tool_manager.remove_tool(tool.name)
++            manager.remove_tool(tool.name)
+             removed.append(tool.name)
+     return removed
+ 
+@@ -179,6 +179,16 @@ def _apply_exposed_tools_mode(server: FastMCP = mcp, mode: Optional[str] = None)
+ 
+ _PROXY_TYPES_SOCKS_HTTP = {"socks5", "socks4", "http"}
+ _PROXY_TYPES_ALL = _PROXY_TYPES_SOCKS_HTTP | {"mtproxy"}
++_CONNECTION_TYPES = {
++    "tcpfull": ConnectionTcpFull,
++    "full": ConnectionTcpFull,
++    "tcpintermediate": ConnectionTcpIntermediate,
++    "intermediate": ConnectionTcpIntermediate,
++    "tcpabridged": ConnectionTcpAbridged,
++    "abridged": ConnectionTcpAbridged,
++    "tcpobfuscated": ConnectionTcpObfuscated,
++    "obfuscated": ConnectionTcpObfuscated,
++}
+ 
+ 
+ def _get_proxy_env(name: str, label: str) -> Optional[str]:
+@@ -268,9 +278,33 @@ def _build_proxy_for_label(label: str) -> tuple[Optional[Any], Optional[Any]]:
+     return proxy, None
+ 
+ 
++def _build_connection_for_label(label: str) -> Optional[Any]:
++    """Resolve optional Telethon connection transport for a label.
++
++    TELEGRAM_CONNECTION accepts: tcpfull, tcpintermediate, tcpabridged,
++    tcpobfuscated. Per-account TELEGRAM_CONNECTION_<LABEL> overrides global.
++    """
++    raw = os.getenv(f"TELEGRAM_CONNECTION_{label.upper()}") or os.getenv("TELEGRAM_CONNECTION")
++    if not raw:
++        return None
++    key = raw.strip().lower().replace("-", "").replace("_", "")
++    try:
++        return _CONNECTION_TYPES[key]
++    except KeyError as exc:
++        raise ValidationError(
++            f"Invalid TELEGRAM_CONNECTION '{raw}'. "
++            f"Expected one of: {', '.join(sorted(_CONNECTION_TYPES))}."
++        ) from exc
++
++
+ def _build_client(session: Any, label: str) -> TelegramClient:
+     """Construct a ``TelegramClient`` honoring per-label proxy configuration."""
+     proxy, connection = _build_proxy_for_label(label)
++    configured_connection = _build_connection_for_label(label)
++    if connection is not None and configured_connection is not None:
++        raise ValidationError("TELEGRAM_CONNECTION cannot be combined with mtproxy.")
++    if connection is None and configured_connection is not None:
++        connection = configured_connection
+     kwargs: dict[str, Any] = {}
+     if proxy is not None:
+         kwargs["proxy"] = proxy
+@@ -450,37 +485,26 @@ logger.setLevel(logging.ERROR)  # Set to ERROR for production, INFO for debuggin
+ console_handler = logging.StreamHandler()
+ console_handler.setLevel(logging.ERROR)  # Set to ERROR for production, INFO for debugging
+ 
+-# Create file handler with absolute path. Keep the legacy location next to
+-# top-level main.py, even though runtime code now lives inside telegram_mcp/.
+-package_dir = os.path.dirname(os.path.abspath(__file__))
+-script_dir = os.path.dirname(package_dir)
+-log_file_path = os.path.join(script_dir, "mcp_errors.log")
+-
+-try:
+-    file_handler = logging.FileHandler(log_file_path, mode="a")  # Append mode
+-    file_handler.setLevel(logging.ERROR)
+-
+-    # Create formatters
+-    # Console formatter remains in the old format
+-    console_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s")
+-    console_handler.setFormatter(console_formatter)
+-
+-    # File formatter is now JSON
+-    json_formatter = jsonlogger.JsonFormatter(
+-        "%(asctime)s %(name)s %(levelname)s %(message)s",
+-        datefmt="%Y-%m-%dT%H:%M:%S%z",
+-    )
+-    file_handler.setFormatter(json_formatter)
++console_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s")
++console_handler.setFormatter(console_formatter)
++logger.addHandler(console_handler)
+ 
+-    # Add handlers to logger
+-    logger.addHandler(console_handler)
+-    logger.addHandler(file_handler)
+-    logger.info(f"Logging initialized to {log_file_path}")
+-except Exception as log_error:
+-    print(f"WARNING: Error setting up log file: {log_error}", file=sys.stderr)
+-    # Fallback to console-only logging
+-    logger.addHandler(console_handler)
+-    logger.error(f"Failed to set up log file handler: {log_error}")
++# Containers use structured stdout/stderr collection and a read-only image.
++# Keep file logging opt-in so importing the embedded runtime cannot emit a
++# false ERROR simply because its installed package directory is immutable.
++log_file_path = os.getenv("TELEGRAM_LOG_FILE")
++if log_file_path:
++    try:
++        file_handler = logging.FileHandler(log_file_path, mode="a")
++        file_handler.setLevel(logging.ERROR)
++        json_formatter = jsonlogger.JsonFormatter(
++            "%(asctime)s %(name)s %(levelname)s %(message)s",
++            datefmt="%Y-%m-%dT%H:%M:%S%z",
++        )
++        file_handler.setFormatter(json_formatter)
++        logger.addHandler(file_handler)
++    except OSError as log_error:
++        print(f"WARNING: Error setting up optional Telegram log file: {log_error}", file=sys.stderr)
+ 
+ 
+ # File-path tool security configuration
+@@ -571,7 +595,7 @@ def log_and_format_error(
+     if user_message:
+         return user_message
+ 
+-    return f"An error occurred (code: {error_code}). Check mcp_errors.log for details."
++    return f"An error occurred (code: {error_code}). Check the server logs for details."
+ 
+ 
+ def validate_id(*param_names_to_validate):
+diff --git a/telegram_mcp/install_guard.py b/telegram_mcp/install_guard.py
+--- a/telegram_mcp/install_guard.py
++++ b/telegram_mcp/install_guard.py
+@@ -10,2 +10,3 @@
+ import json
++import os
+ from dataclasses import dataclass
+@@ -158,3 +159,11 @@
+     if parsed_url.scheme == "file":
+-        source_path = Path(unquote(parsed_url.path)).resolve()
++        source_value = unquote(parsed_url.path)
++        if (
++            os.name == "nt"
++            and len(source_value) >= 3
++            and source_value[0] == "/"
++            and source_value[2] == ":"
++        ):
++            source_value = source_value[1:]
++        source_path = Path(source_value).resolve()
+         return _project_root_declares_distribution_name(source_path)
+
+diff --git a/telegram_mcp/tools/messages.py b/telegram_mcp/tools/messages.py
+index c423e74..fadbaee 100644
+--- a/telegram_mcp/tools/messages.py
++++ b/telegram_mcp/tools/messages.py
+@@ -258,7 +258,7 @@ async def send_message(
+     message: str,
+     parse_mode: Optional[str] = None,
+     account: str = None,
+-) -> str:
++) -> dict[str, Any] | str:
+     """
+     Send a message to a specific chat.
+     Args:
+@@ -271,7 +271,11 @@ async def send_message(
+     try:
+         cl = get_client(account)
+         entity = await resolve_entity(chat_id, cl)
+-        await cl.send_message(entity, message, parse_mode=parse_mode)
+-        return "Message sent successfully."
++        sent = await cl.send_message(entity, message, parse_mode=parse_mode)
++        return {
++            "chat_id": str(get_marked_id(entity)),
++            "message_id": sent.id,
++            "sent_at": sent.date.isoformat() if sent.date else None,
++        }
+     except Exception as e:
+         return log_and_format_error("send_message", e, chat_id=chat_id)
+@@ -1269,7 +1273,7 @@ async def reply_to_message(
+     text: str,
+     parse_mode: Optional[str] = None,
+     account: str = None,
+-) -> str:
++) -> dict[str, Any] | str:
+     """
+     Reply to a specific message in a chat.
+     Args:
+@@ -1283,8 +1287,13 @@ async def reply_to_message(
+     try:
+         cl = get_client(account)
+         entity = await resolve_entity(chat_id, cl)
+-        await cl.send_message(entity, text, reply_to=message_id, parse_mode=parse_mode)
+-        return f"Replied to message {message_id} in chat {chat_id}."
++        sent = await cl.send_message(entity, text, reply_to=message_id, parse_mode=parse_mode)
++        return {
++            "chat_id": str(get_marked_id(entity)),
++            "message_id": sent.id,
++            "reply_to_message_id": message_id,
++            "sent_at": sent.date.isoformat() if sent.date else None,
++        }
+     except Exception as e:
+         return log_and_format_error(
+             "reply_to_message", e, chat_id=chat_id, message_id=message_id, text=text

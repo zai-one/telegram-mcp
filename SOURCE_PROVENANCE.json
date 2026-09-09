@@ -1,0 +1,17 @@
+{
+  "project": "zai-one/telegram-mcp",
+  "version": "0.2.0",
+  "origin": "Extracted from ZAI.ONE-owned MCP platform sources; maintained independently.",
+  "history": "Private extraction history and operational evidence are archived locally, outside public releases.",
+  "changes": "See CHANGELOG.md and the public Git history.",
+  "third_party_notices": "NOTICE",
+  "upstream": {
+    "repo": "https://github.com/chigwell/telegram-mcp.git",
+    "commit": "f1a2d8e00a7f127bb7702655c58fdfcee7e73a5a",
+    "tag": "v3.2.0",
+    "metadata_version": "2.0.1",
+    "manifest": "src/zai_telegram/_vendor/manifest.json",
+    "license": "Apache-2.0",
+    "changes": "Existing platform patch plus namespace-only import rewrites; adapter verifies packaged hashes before loading."
+  }
+}

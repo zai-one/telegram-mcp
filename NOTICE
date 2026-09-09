@@ -1,0 +1,8 @@
+This project incorporates chigwell/telegram-mcp, licensed under Apache License 2.0.
+Original license: vendor/upstream/LICENSE and src/zai_telegram/_vendor/LICENSE.
+Upstream commit f1a2d8e00a7f127bb7702655c58fdfcee7e73a5a (tag v3.2.0).
+Changes: preserved platform patch, followed by private-namespace import rewrites.
+Per-file upstream/patched/package hashes: src/zai_telegram/_vendor/manifest.json.
+Platform-derived sources and original wrapper provenance: SOURCE_PROVENANCE.json.
+ZAI-owned wrapper portions use LicenseRef-ZAI-ONE. The Apache-2.0
+license and rights for the identified third-party code remain unchanged.
