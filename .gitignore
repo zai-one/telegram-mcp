@@ -8,3 +8,11 @@ state/
 .env
 *.sqlite*
 *.session*
+
+mcp.local.json
+*.token
+*.session*
+.coverage*
+
+# Private extraction receipts stay local.
+Service/

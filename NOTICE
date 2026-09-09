@@ -4,5 +4,5 @@ Upstream commit f1a2d8e00a7f127bb7702655c58fdfcee7e73a5a (tag v3.2.0).
 Changes: preserved platform patch, followed by private-namespace import rewrites.
 Per-file upstream/patched/package hashes: src/zai_telegram/_vendor/manifest.json.
 Platform-derived sources and original wrapper provenance: SOURCE_PROVENANCE.json.
-No public license is granted here for the ZAI-specific portions. Publication
-and license selection for those portions are a separate release stage.
+ZAI-owned wrapper portions use LicenseRef-ZAI-ONE. The Apache-2.0
+license and rights for the identified third-party code remain unchanged.

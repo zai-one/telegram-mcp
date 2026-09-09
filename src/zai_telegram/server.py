@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import json
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -12,6 +13,7 @@ from fastmcp.server.auth.providers.jwt import JWTVerifier
 
 from zai_telegram import __version__
 from zai_telegram.config import ServiceConfig
+from zai_telegram.onboarding import check_config, load_config
 from zai_telegram.runtime import Runtime
 from zai_telegram.tools import register_tools
 
@@ -82,9 +84,19 @@ def main() -> None:
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8816)
+    parser.add_argument("--config", help="Operator JSON settings; paths relative to this file")
+    parser.add_argument(
+        "--check-config", action="store_true", help="Check local settings without provider calls"
+    )
     args = parser.parse_args()
     try:
-        server = create_server(ServiceConfig.from_env(), transport=args.transport)
+        load_config(args.config)
+        config = ServiceConfig.from_env()
+        if args.check_config:
+            result = check_config(config, args.transport)
+            print(json.dumps(result, sort_keys=True))
+            parser.exit(0 if result["ready"] else 2)
+        server = create_server(config, transport=args.transport)
     except (ValueError, OSError) as exc:
         parser.exit(2, f"configuration error: {type(exc).__name__}; check credential and policy files\n")
     if args.transport == "http":

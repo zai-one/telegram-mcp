@@ -416,11 +416,23 @@ def register_tools(server: Any, runtime: Any) -> None:
         # because ``_telegram_call`` raises SafeToolError - not ProviderError -
         # so the handler below never caught it either.
         degraded_sources: list[str] = []
+        incomplete_sources: list[str] = []
         for source, tool, arguments, empty_prefix in requests:
             try:
                 raw = await _telegram_call(tool, arguments)
                 payload = _telegram_json_payload(raw, empty_prefix=empty_prefix)
                 records = [item for item in payload["results"] if isinstance(item, dict)]
+                total = payload.get("total_count", payload.get("total"))
+                if (
+                    payload.get("has_more") is True
+                    or payload.get("truncated") is True
+                    or payload.get("completeness") == "partial"
+                    or bool(payload.get("next_cursor"))
+                    or (isinstance(total, int) and not isinstance(total, bool) and total > len(records))
+                    or (source == "dialogs" and len(records) >= 100)
+                    or (source == "public" and len(records) >= limit)
+                ):
+                    incomplete_sources.append(source)
             except (ProviderError, SafeToolError) as exc:
                 if source != "public":
                     if isinstance(exc, SafeToolError):
@@ -430,6 +442,13 @@ def register_tools(server: Any, runtime: Any) -> None:
                 records = []
             sources.append((source, records))
         resolution = _telegram_recipient_resolution(query, sources, limit)
+        if incomplete_sources:
+            resolution.update(
+                status="ambiguous",
+                recipient=None,
+                ambiguity_requires_selection=True,
+                incomplete_sources=incomplete_sources,
+            )
         if degraded_sources:
             # Named, not hidden: a caller that needed the public directory must
             # be able to tell a real "not found" from a source that was down.
