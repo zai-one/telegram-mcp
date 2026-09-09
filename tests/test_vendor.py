@@ -96,7 +96,10 @@ secret.write_text("TELEGRAM_API_ID=12345\\nTELEGRAM_API_HASH=synthetic-api-hash\
 secret.chmod(0o600)
 
 async def main():
-    adapter = TelegramAdapter(secret, write_enabled=__WRITE_ENABLED__, strict_secret=True)
+    from zai_telegram.media_policy import MediaPolicy
+    outgoing = secret.parent / 'outgoing'
+    adapter = TelegramAdapter(secret, write_enabled=__WRITE_ENABLED__, strict_secret=True,
+                              media_policy=MediaPolicy((outgoing,)) if __WRITE_ENABLED__ else None)
     server = await adapter._embedded_server()
     async with Client(server) as client:
         tools = await client.list_tools()
@@ -106,6 +109,35 @@ async def main():
     assert writes <= set(TELEGRAM_WRITE_ALLOWLIST)
     assert bool(writes) == __WRITE_ENABLED__
     assert "send_message" in names if __WRITE_ENABLED__ else "send_message" not in names
+    if __WRITE_ENABLED__:
+        import zai_telegram._vendor.telegram_mcp.tools.media as media
+        from zai_telegram.media_policy import MediaPolicy
+        from zai_telegram.transport import ProviderError
+        outgoing = secret.parent / 'outgoing'
+        outgoing.mkdir()
+        voice = outgoing / 'voice.ogg'
+        voice.write_bytes(b'OggSfixture')
+        # First process load pinned the default policy, so this test supplies the
+        # policy before that first load (see adapter construction below).
+        assert adapter.media_policy.roots == (outgoing,)
+        runtime = adapter._runtime
+        calls = []
+        async def resolve(identifier, client=None): return 101
+        async def send(entity, file, **kwargs): calls.append((entity, file, kwargs))
+        runtime.resolve_entity = media.resolve_entity = resolve
+        runtime.clients['default'].send_file = send
+        result = await adapter.call_write('send_voice',
+            {'chat_id': '101', 'file_path': 'voice.ogg', 'account': 'default'})
+        assert 'Voice message sent' in result
+        assert calls == [(101, str(voice), {'voice_note': True})]
+        try:
+            await adapter.call_write('send_voice',
+                {'chat_id': '101', 'file_path': str(secret), 'account': 'default'})
+        except ProviderError:
+            pass
+        else:
+            raise AssertionError('secret outside root was accepted')
+        assert len(calls) == 1
     await adapter.close()
     print("pinned upstream discovery passed", len(tools), "write", __WRITE_ENABLED__)
 

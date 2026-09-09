@@ -17,6 +17,7 @@ from fastmcp.client.transports import FastMCPTransport
 from fastmcp.exceptions import ToolError
 from fastmcp.tools import Tool
 
+from zai_telegram.media_policy import FILE_FIELDS, MediaPolicy, download, exact_chat, verify_receipt
 from zai_telegram.secrets import read_private_secret_env, read_secret_env
 from zai_telegram.transport import ProviderError, ProviderTimeoutError, ProviderTransportError
 from zai_telegram.vendor_integrity import assert_pinned_vendor
@@ -230,11 +231,17 @@ class TelegramAdapter:
     """Run the pinned Telegram MCP runtime inside the platform process."""
 
     def __init__(
-        self, secret_path: Path, *, write_enabled: bool = False, strict_secret: bool = False
+        self,
+        secret_path: Path,
+        *,
+        write_enabled: bool = False,
+        strict_secret: bool = False,
+        media_policy: MediaPolicy | None = None,
     ) -> None:
         self.secret_path = secret_path
         self.write_enabled = write_enabled
         self.strict_secret = strict_secret
+        self.media_policy = media_policy or MediaPolicy()
         self._server: Any | None = None
         self._runtime: ModuleType | None = None
         self._load_lock = asyncio.Lock()
@@ -286,7 +293,9 @@ class TelegramAdapter:
             # frozen allowlist, so a vendor upgrade can never auto-expose a new
             # write tool — the platform surface stays deterministic either way.
             mode = "all" if self.write_enabled else "read-only"
-            fingerprint = hashlib.sha256(json.dumps([secret, mode], sort_keys=True).encode()).hexdigest()
+            fingerprint = hashlib.sha256(
+                json.dumps([secret, mode, self.media_policy.fingerprint()], sort_keys=True).encode()
+            ).hexdigest()
             with _PROCESS_RUNTIME_LOCK:
                 if _PROCESS_FINGERPRINT is not None and fingerprint != _PROCESS_FINGERPRINT:
                     raise ProviderError("Telegram process configuration changed; restart required")
@@ -308,6 +317,7 @@ class TelegramAdapter:
                 except (ImportError, RuntimeError, SystemExit, TypeError, ValueError) as exc:
                     raise ProviderError("pinned embedded Telegram runtime failed to load") from exc
                 runtime._apply_exposed_tools_mode(runtime.mcp, mode)
+                runtime.SERVER_ALLOWED_ROOTS = list(self.media_policy.roots)
                 if self.write_enabled:
                     self._prune_to_write_allowlist(runtime.mcp)
                 self._runtime = runtime
@@ -396,7 +406,7 @@ class TelegramAdapter:
         for field in ("message", "text", "new_text", "caption"):
             if field in values and values[field] is not None:
                 self._bounded_text(values[field], field, 1, 4096)
-        return values
+        return getattr(self, "media_policy", MediaPolicy()).validate(upstream_tool, values)
 
     async def call_write(self, upstream_tool: str, arguments: dict[str, Any]) -> Any:
         values = self.validate_write(upstream_tool, arguments)
@@ -406,7 +416,18 @@ class TelegramAdapter:
         values = {key: value for key, value in values.items() if value is not None}
         try:
             server = await self._embedded_server()
-            async with Client(FastMCPTransport(server), timeout=TELEGRAM_UPSTREAM_TIMEOUT_SECONDS) as client:
+            if upstream_tool == "download_media":
+                return await download(self.media_policy, self._runtime, values)
+            if upstream_tool in FILE_FIELDS and "chat_id" in values and self._runtime is not None:
+                await exact_chat(
+                    self._runtime, self._runtime.get_client(values["account"]), values["chat_id"]
+                )
+            async with Client(
+                FastMCPTransport(server),
+                timeout=TELEGRAM_UPSTREAM_TIMEOUT_SECONDS,
+                roots=[root.as_uri() for root in self.media_policy.roots],
+                mode="legacy",
+            ) as client:
                 result = await client.call_tool(upstream_tool, values)
         except ProviderError:
             raise
@@ -425,6 +446,7 @@ class TelegramAdapter:
         value = _fastmcp_result_value(result)
         if isinstance(value, str) and value.startswith(error_prefixes):
             raise ProviderError("embedded Telegram write returned an error")
+        verify_receipt(upstream_tool, value)
         return value
 
     @staticmethod
@@ -523,3 +545,15 @@ class TelegramAdapter:
             return
         clients = list(getattr(self._runtime, "clients", {}).values())
         await asyncio.gather(*(client.disconnect() for client in clients), return_exceptions=True)
+
+    async def poll_messages(self, chat, after, limit, account):
+        from zai_telegram.polling import read_since
+
+        if not self.has_account(account):
+            raise ProviderError("Telegram account is not configured")
+        try:
+            return await read_since(self, chat, after, limit, account)
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise self._runtime_error(exc) from exc

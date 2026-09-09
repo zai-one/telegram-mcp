@@ -93,7 +93,10 @@ class Runtime:
         self.transport = transport
         self.store = StateStore(config)
         self.adapter = adapter or TelegramAdapter(
-            config.secret_path, write_enabled=config.telegram_write_enabled, strict_secret=True
+            config.secret_path,
+            write_enabled=config.telegram_write_enabled,
+            strict_secret=True,
+            media_policy=config.media_policy,
         )
         self.state: ContextVar[CallState] = ContextVar("telegram_call")
         self.registry = Registry(self)

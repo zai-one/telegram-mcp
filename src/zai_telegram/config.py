@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
+from zai_telegram.media_policy import MediaPolicy
 from zai_telegram.secrets import read_private_secret_env, require_private_file
 
 SCOPES = frozenset({"telegram:read", "telegram:write"})
@@ -30,6 +31,7 @@ class ServiceConfig:
     write_rate_limit: int = 20
     telegram_high_risk_rate_limit_per_minute: int = 3
     max_concurrency: int = 2
+    media_policy: MediaPolicy = field(default_factory=MediaPolicy)
 
     def __post_init__(self):
         if not all(
@@ -83,6 +85,15 @@ class ServiceConfig:
         if write_mode not in {"true", "false"} or enabled not in {"true", "false"}:
             raise ValueError("boolean policy must be true or false")
         return cls(
+            media_policy=MediaPolicy.load(
+                os.environ.get("TELEGRAM_MEDIA_POLICY_FILE"),
+                protected=(
+                    secret,
+                    binding_path,
+                    public,
+                    Path(os.environ.get("TELEGRAM_STATE_PATH", "state/telegram.sqlite")),
+                ),
+            ),
             state_path=Path(os.environ.get("TELEGRAM_STATE_PATH", "state/telegram.sqlite")),
             secret_path=secret,
             bindings=bindings,

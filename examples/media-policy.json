@@ -1,0 +1,5 @@
+{
+  "roots": ["outgoing"],
+  "download_root": "incoming",
+  "max_file_bytes": 20971520
+}

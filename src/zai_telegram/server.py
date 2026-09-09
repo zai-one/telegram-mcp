@@ -14,6 +14,7 @@ from fastmcp.server.auth.providers.jwt import JWTVerifier
 from zai_telegram import __version__
 from zai_telegram.config import ServiceConfig
 from zai_telegram.onboarding import check_config, load_config
+from zai_telegram.polling import register_polling
 from zai_telegram.runtime import Runtime
 from zai_telegram.tools import register_tools
 
@@ -76,6 +77,7 @@ def create_server(
     )
     registrar = ToolRegistrar(server, runtime)
     register_tools(registrar, runtime)
+    register_polling(registrar, runtime)
     return server
 
 

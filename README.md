@@ -19,6 +19,8 @@ Try asking your assistant:
 | Catch up | List chats, read recent messages and retrieve conversation context for the assistant to summarise. |
 | Find the right detail | Search messages and resolve a recipient before writing. |
 | Send and follow up | Send or reply when permitted, submit message batches and inspect outbox status. |
+| Work with attachments | [Files, albums and voice notes](docs/MEDIA_AND_POLLING.md) from operator-approved folders, plus bounded downloads to a separate folder. |
+| Keep up with selected chats | Poll new message IDs and acknowledge processed batches. Cursors survive a restart; unacknowledged messages can be read again. |
 
 ## Quick start
 
@@ -73,7 +75,7 @@ If tools do not appear, check the absolute path, whether the client can find `uv
 
 ## Access and limits
 
-Your session grants access to Telegram data, so use a client you trust. The assistant receives messages you request. Incomplete recipient searches remain ambiguous. The guided setup covers text conversations. Some media actions are already in the `telegram_write` allowlist; file transfers still need a dedicated setup and access-validation workflow. A live event-feed tool is not exposed.
+Your session grants access to Telegram data, so use a client you trust. The assistant receives messages you request. Incomplete recipient searches remain ambiguous. [Media setup and message polling](docs/MEDIA_AND_POLLING.md) explain file permissions, size limits and acknowledgment. Polling tracks new message IDs; it does not track edits or deletions and is not a live event stream.
 
 Authenticated HTTP is available for a server deployment. See [HTTP setup](INSTALL.md#http), [configuration and permissions](docs/RUNTIME.md) and [Python package integration](INSTALL.md#python-package-and-platform-integration).
 

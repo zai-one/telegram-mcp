@@ -44,7 +44,8 @@ async def test_frozen_original_contract_exactly_matches_standalone(config):
             }
             for tool in await client.list_tools()
         }
-    assert actual == expected
+    assert {name: actual[name] for name in expected} == expected
+    assert set(actual) == set(expected) | {"telegram_poll_messages", "telegram_acknowledge_poll"}
 
 
 async def test_authenticated_http_scopes_bindings_and_outbox_ownership(config):
@@ -65,7 +66,7 @@ async def test_authenticated_http_scopes_bindings_and_outbox_ownership(config):
 
     async with connection(server, token(scopes=["telegram:read"])) as client:
         names = {tool.name for tool in await client.list_tools()}
-        assert len(names) == 7 and "telegram_send_message" not in names
+        assert len(names) == 9 and "telegram_send_message" not in names
         with pytest.raises(ToolError):
             await client.call_tool("telegram_send_message", SEND)
     for bearer in [token(account="other"), token(actor="unbound")]:
@@ -96,7 +97,7 @@ async def test_real_stdio_discovers_without_loading_telegram_sessions(config, tm
         "TELEGRAM_BINDINGS_FILE": str(bindings),
     }
     async with Client(StdioTransport(command=sys.executable, args=["-m", "zai_telegram"], env=env)) as client:
-        assert len(await client.list_tools()) == 7
+        assert len(await client.list_tools()) == 9
 
 
 def test_http_requires_explicit_verification_key(config):
@@ -108,7 +109,7 @@ async def test_stdio_scope_restriction_is_enforced_even_when_write_mode_is_enabl
     adapter = FixtureAdapter()
     settings = replace(config, local_scopes=frozenset({"telegram:read"}))
     async with Client(create_server(settings, transport="stdio", adapter=adapter)) as client:
-        assert len(await client.list_tools()) == 7
+        assert len(await client.list_tools()) == 9
         with pytest.raises(ToolError):
             await client.call_tool("telegram_send_message", SEND)
     assert adapter.calls == []

@@ -22,6 +22,16 @@ def local_only(sock, address):
         raise RuntimeError('external network disabled in clean-install gate')
     return original(sock, address)
 socket.socket.connect = local_only
+from zai_telegram import server
+class FixtureAdapter:
+    def has_account(self, label): return label == 'default'
+    async def poll_messages(self, chat, after, limit, account):
+        assert account == 'default'
+        return [{'message_id': 10 if after is None else 11, 'text': 'installed fixture'}]
+    async def close(self): pass
+real_create = server.create_server
+def create(*args, **kwargs): return real_create(*args, **kwargs, adapter=FixtureAdapter())
+server.create_server = create
 package, config = sys.argv[1:]
 sys.argv = [package, '--config', config]
 runpy.run_module(package, run_name='__main__')
@@ -58,6 +68,11 @@ async def check():
         tools = await client.list_tools()
         assert len(tools) >= int(minimum)
         assert all(tool.name for tool in tools)
+        baseline = (await client.call_tool('telegram_poll_messages', {'chat_ids': ['101']})).data
+        assert baseline['reports'][0]['baseline_only'] and not baseline['reports'][0]['messages']
+        await client.call_tool('telegram_acknowledge_poll', {'batch_id': baseline['batch_id']})
+        next_batch = (await client.call_tool('telegram_poll_messages', {'chat_ids': ['101']})).data
+        assert next_batch['reports'][0]['messages'][0]['message_id'] == 11
         print(json.dumps({'version': expected_version, 'tools': sorted(tool.name for tool in tools)}))
 asyncio.run(check())
 """
@@ -171,7 +186,7 @@ def main():
             "Roistat": 22,
             "Yandex": 47,
             "Arsenkin": 12,
-            "Telegram": 7,
+            "Telegram": 9,
             "Passbolt": 3,
         }[NAME]
         print(

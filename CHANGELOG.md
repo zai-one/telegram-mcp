@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
+- Operator-owned media folders, bounded files/albums/voice notes and exclusive bounded downloads to a separate folder; existing account, write policy and durable outbox retained.
+- Explicit numeric destination checks for media and polling, with no caller-controlled roots.
+- Poll selected chats after acknowledged message IDs; first poll proposes a current baseline. Durable actor/account-bound batches, atomic acknowledgment and safe replay across restart.
 - Installable setup wizard and JSON/TOML client snippets that work outside the checkout.
 - English and Russian agency information, integration contact and package installation guide.
 

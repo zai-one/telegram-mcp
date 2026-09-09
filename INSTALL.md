@@ -112,7 +112,7 @@ The local configuration check never generates a signing key or an access token.
 
 ```sh
 uv build
-python -m pip install "dist/zai_telegram_mcp-0.2.0-py3-none-any.whl"
+python -m pip install "dist/zai_telegram_mcp-0.3.0-py3-none-any.whl"
 zai-telegram-mcp --config /ABSOLUTE/PATH/mcp.local.json
 ```
 
