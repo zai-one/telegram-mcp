@@ -22,7 +22,7 @@ Example `telegram_write` arguments for an existing OGG/Opus voice note:
 {
   "tool": "send_voice",
   "arguments": {"chat_id": "123456789", "file_path": "reply.ogg"},
-  "idempotency_key": "voice-reply-001"
+  "idempotency_key": "example-001"
 }
 ```
 

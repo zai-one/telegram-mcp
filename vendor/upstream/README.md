@@ -314,7 +314,7 @@ MTProxy:
 TELEGRAM_PROXY_TYPE=mtproxy
 TELEGRAM_PROXY_HOST=mtproxy.example
 TELEGRAM_PROXY_PORT=443
-TELEGRAM_PROXY_SECRET=ee0123456789abcdef...
+TELEGRAM_PROXY_SECRET=YOUR_PROXY_SECRET
 ```
 
 Per-account overrides use the same `_<LABEL>` suffix as session variables and
