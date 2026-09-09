@@ -2,15 +2,19 @@
 
 # Telegram MCP
 
-Telegram conversations, recipient search and guarded messaging.
+MCP server for reading Telegram conversations and sending messages from an AI assistant. It connects to a Telegram user account and provides chat search, conversation context, recipient lookup and delivery status.
 
-Install it on your own computer or server and connect an MCP client. No AI Kit or
-central ZAI platform installation is required. Provider credentials and API access
-are required; provider charges and account restrictions still apply.
+## What you can do
+
+- Browse chats and inbox messages, search messages and retrieve conversation context.
+- Resolve a recipient before sending a message or reply.
+- Send message batches and inspect their outbox status when writing is enabled.
 
 ## Quick start
 
 Install Python 3.12+ (below 3.15), [uv](https://docs.astral.sh/uv/getting-started/installation/) and Git.
+
+You need a Telegram API ID, API hash and an authenticated user session. The local wizard can create the session through an interactive login. A bot token cannot replace the user session. See [Telegram login setup](INSTALL.md#from-a-clone-or-source-zip).
 
 ```sh
 git clone https://github.com/zai-one/telegram-mcp.git
@@ -25,12 +29,9 @@ The last command starts stdio and waits for an MCP client; it is not an interact
 See [INSTALL.md](INSTALL.md) for credentials, client configuration, HTTP and package integration.
 `--check-config` checks local settings only; it never validates a provider account over the network.
 
-## Included in 0.2.0
+## Scope and limits
 
-Recipient search marks incomplete results as ambiguous. Messages remain untrusted content. Media and event-feed expansion are future work.
-
-Existing tool names and schemas remain supported. Writes and paid operations retain
-their server policy and approval controls. See [runtime configuration](docs/RUNTIME.md).
+Read-only access is the default. Sending requires separate permission; an incomplete recipient search remains ambiguous and is not treated as a confirmed match. This interface does not include media transfers or a live event feed. See [access and messaging settings](docs/RUNTIME.md).
 
 ## Verification
 
