@@ -1,0 +1,7 @@
+{
+  "env": {
+    "TELEGRAM_SECRET_FILE": "secrets/telegram.env",
+    "TELEGRAM_BINDINGS_FILE": "secrets/bindings.json",
+    "TELEGRAM_STATE_PATH": "state/telegram.sqlite"
+  }
+}

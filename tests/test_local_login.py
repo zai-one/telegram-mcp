@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture
 def login():
-    path = Path(__file__).parents[1] / "scripts/login_telegram.py"
+    path = Path(__file__).parents[1] / "src/zai_telegram/login_telegram.py"
     spec = importlib.util.spec_from_file_location("local_login_fixture", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
