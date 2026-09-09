@@ -71,7 +71,7 @@ If tools do not appear, check the absolute path, whether the client can find `uv
 
 ## Access and limits
 
-Your session grants access to Telegram data, so use a client you trust. The assistant receives messages you request. Incomplete recipient searches remain ambiguous; media transfer and a live event feed are outside this interface.
+Your session grants access to Telegram data, so use a client you trust. The assistant receives messages you request. Incomplete recipient searches remain ambiguous. The guided setup covers text conversations. Some media actions are already in the `telegram_write` allowlist; file transfers still need a dedicated setup and access-validation workflow. A live event-feed tool is not exposed.
 
 Authenticated HTTP is available for a server deployment. See [HTTP setup](INSTALL.md#http), [configuration and permissions](docs/RUNTIME.md) and [Python package integration](INSTALL.md#python-package-and-platform-integration).
 
