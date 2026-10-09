@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Telethon 1.44.0 → 1.45.0 (MTProto layer 227 → 229). Constructor signatures of every Telethon request/type used by the embedded runtime are unchanged between the two releases.
+
 ## 0.3.0
 
 - Operator-owned media folders, bounded files/albums/voice notes and exclusive bounded downloads to a separate folder; existing account, write policy and durable outbox retained.
