@@ -80,7 +80,11 @@ def test_offline_degrades_gracefully(enabled):
     assert stale["source"] == "stale_cache" and stale["latest_version"] == "99.0.0"
 
 
-@pytest.mark.parametrize("body", [b"not json", b"[]", release(tag="nightly"), b"x" * 2_000_000])
+@pytest.mark.parametrize(
+    "body",
+    [b"not json", b"[]", release(tag="nightly"), b"x" * 2_000_000],
+    ids=["not-json", "json-array", "non-version-tag", "oversized"],
+)
 def test_malformed_responses_are_ignored(enabled, body):
     assert update_check.check_for_update(fetch=FakeGitHub(body))["status"] == "unavailable"
 
