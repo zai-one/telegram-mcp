@@ -130,7 +130,11 @@ async def read_since(adapter, chat, after, limit, account):
 def register_polling(server, runtime):
     store = PollStore(runtime.store)
 
-    @server.tool(auth=runtime.require_scopes("telegram:read"))
+    # Polling never sends read receipts; it only records a local cursor batch.
+    @server.tool(
+        auth=runtime.require_scopes("telegram:read"),
+        annotations={"readOnlyHint": True, "openWorldHint": True},
+    )
     async def telegram_poll_messages(chat_ids: list[str], max_per_chat: int = 20) -> dict:
         """Poll selected numeric chats after acknowledged IDs; first poll proposes a baseline at now."""
         if not 1 <= len(chat_ids) <= 10 or len(set(chat_ids)) != len(chat_ids):
@@ -193,7 +197,15 @@ def register_polling(server, runtime):
         result["expires_in_seconds"] = 86400
         return result
 
-    @server.tool(auth=runtime.require_scopes("telegram:read"))
+    @server.tool(
+        auth=runtime.require_scopes("telegram:read"),
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
     async def telegram_acknowledge_poll(batch_id: str) -> dict:
         """Acknowledge a processed local poll batch without sending Telegram read receipts."""
         await runtime.registry.ensure_enabled("telegram")

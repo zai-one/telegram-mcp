@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Telethon 1.44.0 → 1.45.0 (MTProto layer 227 → 229). Constructor signatures of every Telethon request/type used by the embedded runtime are unchanged between the two releases.
+- MCP tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) on every tool, matching the existing `telegram:read`/`telegram:write` split. Hints only; scopes, bindings and the write allowlist still enforce access.
 
 ## 0.3.0
 

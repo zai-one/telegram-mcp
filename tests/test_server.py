@@ -113,3 +113,27 @@ async def test_stdio_scope_restriction_is_enforced_even_when_write_mode_is_enabl
         with pytest.raises(ToolError):
             await client.call_tool("telegram_send_message", SEND)
     assert adapter.calls == []
+
+
+async def test_tool_annotations_match_read_write_split(config):
+    async with Client(create_server(config, transport="stdio", adapter=FixtureAdapter())) as client:
+        tools = {tool.name: tool.annotations for tool in await client.list_tools()}
+    for name in (
+        "telegram_list_chats",
+        "telegram_get_inbox",
+        "telegram_search_messages",
+        "telegram_get_messages",
+        "telegram_get_chat",
+        "telegram_get_conversation_context",
+        "telegram_resolve_recipient",
+        "telegram_poll_messages",
+        "telegram_outbox_status",
+    ):
+        assert tools[name].read_only_hint is True, name
+    for name in ("telegram_send_message", "telegram_reply_to_message", "telegram_send_many"):
+        assert tools[name].read_only_hint is False and tools[name].destructive_hint is False, name
+        assert tools[name].idempotent_hint is True, name
+    assert tools["telegram_write"].read_only_hint is False
+    assert tools["telegram_write"].destructive_hint is True
+    assert tools["telegram_acknowledge_poll"].read_only_hint is False
+    assert tools["telegram_acknowledge_poll"].open_world_hint is False
