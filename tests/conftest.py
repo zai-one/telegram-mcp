@@ -33,3 +33,11 @@ def deny_external_network(monkeypatch):
         return original(sock, address)
 
     monkeypatch.setattr(socket.socket, "connect", local_only)
+
+
+@pytest.fixture(autouse=True)
+def isolated_update_check(monkeypatch, tmp_path):
+    # Tests never reach GitHub; update-check tests opt back in with a mocked fetch.
+    monkeypatch.setenv("TELEGRAM_MCP_DISABLE_UPDATE_CHECK", "1")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "cache"))

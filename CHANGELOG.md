@@ -4,6 +4,7 @@
 
 - Telethon 1.44.0 → 1.45.0 (MTProto layer 227 → 229). Constructor signatures of every Telethon request/type used by the embedded runtime are unchanged between the two releases.
 - MCP tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) on every tool, matching the existing `telegram:read`/`telegram:write` split. Hints only; scopes, bindings and the write allowlist still enforce access.
+- `telegram_check_update`: read-only, suggest-only check of the latest GitHub release (3 s timeout, 24 h cache, graceful offline result) with release notes link and update command. A cached newer release adds a one-line hint to the startup MCP instructions; the stale cache is refreshed on a background thread. Opt out with `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1`.
 
 ## 0.3.0
 
