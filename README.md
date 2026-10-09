@@ -79,6 +79,10 @@ Your session grants access to Telegram data, so use a client you trust. The assi
 
 Authenticated HTTP is available for a server deployment. See [HTTP setup](INSTALL.md#http), [configuration and permissions](docs/RUNTIME.md) and [Python package integration](INSTALL.md#python-package-and-platform-integration).
 
+### Update notifications
+
+`telegram_check_update` compares the installed version with the [latest GitHub release](https://github.com/zai-one/telegram-mcp/releases) and returns the release notes link plus the command to update (a release wheel via `uv tool install --force`, or `git pull --ff-only && uv sync --frozen` in a checkout). It only suggests: nothing is downloaded or installed. The check is one anonymous request to the public GitHub API with a 3-second timeout, cached for 24 hours; offline it reports `unavailable`. When the cache already knows of a newer release, the server adds a one-line hint to its MCP instructions at startup. Set `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1` to turn both off. Verify the wheel against `SHA256SUMS.txt` as described in [INSTALL.md](INSTALL.md#install-a-release-package).
+
 <details>
 <summary>For developers: project checks</summary>
 

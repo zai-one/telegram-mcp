@@ -17,6 +17,7 @@ from zai_telegram.onboarding import check_config, load_config
 from zai_telegram.polling import register_polling
 from zai_telegram.runtime import Runtime
 from zai_telegram.tools import register_tools
+from zai_telegram.update_check import cached_update_hint, check_for_update, refresh_in_background
 
 
 class ToolRegistrar:
@@ -73,12 +74,36 @@ def create_server(
                 await close()
 
     server = FastMCP(
-        "Telegram MCP", version=__version__, auth=auth, mask_error_details=True, lifespan=lifespan
+        "Telegram MCP",
+        # Cache-only: startup never waits on the network for this hint.
+        instructions=cached_update_hint(),
+        version=__version__,
+        auth=auth,
+        mask_error_details=True,
+        lifespan=lifespan,
     )
     registrar = ToolRegistrar(server, runtime)
     register_tools(registrar, runtime)
     register_polling(registrar, runtime)
+    register_update_check(server, runtime)
     return server
+
+
+def register_update_check(server: FastMCP, runtime: Runtime) -> None:
+    # Registered directly: it needs no Telegram account binding or provider budget.
+    @server.tool(
+        auth=runtime.require_scopes("telegram:read"),
+        annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True},
+    )
+    def telegram_check_update(force: bool = False) -> dict[str, Any]:
+        """Check GitHub for a newer zai-telegram-mcp release and suggest the update command.
+
+        Read-only and suggest-only: nothing is downloaded or installed. Uses a 24h cache
+        unless force=true; disabled by TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1.
+        """
+        if not isinstance(force, bool):
+            raise ValueError("force must be a boolean")
+        return check_for_update(force=force)
 
 
 def main() -> None:
@@ -99,6 +124,7 @@ def main() -> None:
             print(json.dumps(result, sort_keys=True))
             parser.exit(0 if result["ready"] else 2)
         server = create_server(config, transport=args.transport)
+        refresh_in_background()
     except (ValueError, OSError) as exc:
         parser.exit(2, f"configuration error: {type(exc).__name__}; check credential and policy files\n")
     if args.transport == "http":
