@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import inspect
 import json
 from collections.abc import Callable
@@ -17,6 +18,7 @@ from zai_telegram.onboarding import check_config, load_config
 from zai_telegram.polling import register_polling
 from zai_telegram.runtime import Runtime
 from zai_telegram.tools import register_tools
+from zai_telegram.transport import LocalPreDispatchDenied, ProviderAdmissionDenied
 from zai_telegram.update_check import cached_update_hint, check_for_update, refresh_in_background
 
 
@@ -85,17 +87,24 @@ def create_server(
     registrar = ToolRegistrar(server, runtime)
     register_tools(registrar, runtime)
     register_polling(registrar, runtime)
-    register_update_check(server, runtime)
+    register_update_check(registrar, runtime)
     return server
 
 
-def register_update_check(server: FastMCP, runtime: Runtime) -> None:
-    # Registered directly: it needs no Telegram account binding or provider budget.
+def register_update_check(server: Any, runtime: Runtime) -> None:
+    """Register the local update check through the same registrar as the Telegram tools.
+
+    The registrar supplies the stdio scope filter, the authenticated identity and
+    account binding, the size bound and the audit row. The per-account admission
+    (quota, concurrency lease, cooldown) is taken explicitly because the check
+    makes no Telegram call that would otherwise pass through the provider registry.
+    """
+
     @server.tool(
         auth=runtime.require_scopes("telegram:read"),
         annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True},
     )
-    def telegram_check_update(force: bool = False) -> dict[str, Any]:
+    async def telegram_check_update(force: bool = False) -> dict[str, Any]:
         """Check GitHub for a newer zai-telegram-mcp release and suggest the update command.
 
         Read-only and suggest-only: nothing is downloaded or installed. Uses a 24h cache
@@ -103,7 +112,13 @@ def register_update_check(server: FastMCP, runtime: Runtime) -> None:
         """
         if not isinstance(force, bool):
             raise ValueError("force must be a boolean")
-        return check_for_update(force=force)
+        access = runtime.current_access()
+        try:
+            runtime.store.admit(access.execution_id, access.principal_id, write=False)
+        except ProviderAdmissionDenied as exc:
+            raise LocalPreDispatchDenied(str(exc), retry_after_seconds=exc.retry_after_seconds) from None
+        # The GitHub request blocks for up to its timeout; keep it off the event loop.
+        return await asyncio.to_thread(check_for_update, force=force)
 
 
 def main() -> None:
