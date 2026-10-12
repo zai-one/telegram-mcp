@@ -79,6 +79,10 @@ uv run --frozen zai-telegram-mcp --config mcp.local.json --check-config
 
 Для работы по сети предусмотрен HTTP с проверкой токенов. [Настройка HTTP](INSTALL.md#http), [конфигурация и права](docs/RUNTIME.md), [подключение Python-пакета](INSTALL.md#python-package-and-platform-integration).
 
+### Уведомления об обновлениях
+
+`telegram_check_update` сравнивает установленную версию с [последним релизом на GitHub](https://github.com/zai-one/telegram-mcp/releases) и возвращает ссылку на заметки к релизу и команду обновления (wheel из релиза через `uv tool install --force` или `git pull --ff-only && uv sync --frozen` в клоне). Инструмент только подсказывает: ничего не скачивается и не устанавливается. Проверка делает один анонимный запрос к публичному GitHub API с таймаутом 3 секунды, результат кэшируется на 24 часа; без сети возвращается `unavailable`. Если в кэше уже есть более новый релиз, сервер при запуске добавляет однострочную подсказку в MCP-инструкции. Отключить всё это: `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1`. Проверяйте wheel по `SHA256SUMS.txt`, как описано в [INSTALL.md](INSTALL.md#install-a-release-package).
+
 <details>
 <summary>Для разработчиков: проверки проекта</summary>
 

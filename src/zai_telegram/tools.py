@@ -10,6 +10,23 @@ from zai_telegram.errors import SafeToolError, safe_provider_error
 from zai_telegram.sanitizer import sanitize_provider_response
 from zai_telegram.transport import LocalPreDispatchDenied, ProviderError, ProviderRateLimited, request_hash
 
+# MCP tool annotations are client hints only; scopes, bindings and the write
+# allowlist remain the server-owned enforcement.
+READ_ANNOTATIONS: dict[str, bool] = {"readOnlyHint": True, "openWorldHint": True}
+SEND_ANNOTATIONS: dict[str, bool] = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
+LEDGER_ANNOTATIONS: dict[str, bool] = {"readOnlyHint": True, "openWorldHint": False}
+WRITE_ANNOTATIONS: dict[str, bool] = {
+    "readOnlyHint": False,
+    "destructiveHint": True,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
+
 _TELEGRAM_BATCH_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 
 
@@ -270,7 +287,7 @@ def register_tools(server: Any, runtime: Any) -> None:
         except (ProviderError, PermissionError, ValueError) as exc:
             raise safe_provider_error("telegram", exc) from None
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_list_chats(
         limit: int = 20,
         chat_type: str | None = None,
@@ -292,7 +309,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             },
         )
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_get_inbox(
         limit: int = 20,
         unread_only: bool = True,
@@ -322,7 +339,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             "untrusted_content": True,
         }
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_search_messages(query: str, chat_id: str | None = None, limit: int = 20) -> Any:
         """Search Telegram messages without exposing write operations."""
         args: dict[str, Any] = {"query": query, "limit": limit}
@@ -330,14 +347,14 @@ def register_tools(server: Any, runtime: Any) -> None:
             args["chat_id"] = chat_id
         return await _telegram_call("telegram_search_messages", args)
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_get_messages(chat_id: str, page: int = 1, page_size: int = 20) -> Any:
         """Get a bounded page of messages from a Telegram chat."""
         return await _telegram_call(
             "telegram_get_messages", {"chat_id": chat_id, "page": page, "page_size": page_size}
         )
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_get_chat(chat_id: str) -> Any:
         """Get safe metadata for one Telegram chat."""
         raw = await _telegram_call("telegram_get_chat", {"chat_id": chat_id})
@@ -347,7 +364,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             raise safe_provider_error("telegram", exc) from exc
         return {"results": payload.get("results", []), **_telegram_chat_metadata(payload)}
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_get_conversation_context(chat_id: str, limit: int = 50) -> dict[str, Any]:
         """Return normalized chat metadata and chronological message envelopes."""
         chat_raw = await _telegram_call("telegram_get_chat", {"chat_id": chat_id})
@@ -372,7 +389,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             "untrusted_content": True,
         }
 
-    @server.tool(auth=require_scopes("telegram:read"))
+    @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_resolve_recipient(
         query: str, limit: int = 20, include_public: bool = True
     ) -> dict[str, Any]:
@@ -455,7 +472,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             resolution["degraded_sources"] = degraded_sources
         return resolution
 
-    @server.tool(auth=require_scopes("telegram:write"))
+    @server.tool(auth=require_scopes("telegram:write"), annotations=SEND_ANNOTATIONS)
     async def telegram_send_message(
         chat_id: str,
         message: str,
@@ -468,7 +485,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             arguments["parse_mode"] = parse_mode
         return await _telegram_write("send_message", arguments, idempotency_key)
 
-    @server.tool(auth=require_scopes("telegram:write"))
+    @server.tool(auth=require_scopes("telegram:write"), annotations=SEND_ANNOTATIONS)
     async def telegram_reply_to_message(
         chat_id: str,
         message_id: int,
@@ -486,7 +503,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             arguments["parse_mode"] = parse_mode
         return await _telegram_write("reply_to_message", arguments, idempotency_key)
 
-    @server.tool(auth=require_scopes("telegram:write"))
+    @server.tool(auth=require_scopes("telegram:write"), annotations=SEND_ANNOTATIONS)
     async def telegram_send_many(batch_id: str, items: list[dict[str, Any]]) -> dict[str, Any]:
         """Send 1..20 independently idempotent messages to resolved recipients."""
         try:
@@ -617,7 +634,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             "summary": counts,
         }
 
-    @server.tool(auth=require_scopes("telegram:write"))
+    @server.tool(auth=require_scopes("telegram:write"), annotations=LEDGER_ANNOTATIONS)
     async def telegram_outbox_status(
         batch_id: str | None = None,
         idempotency_keys: list[str] | None = None,
@@ -678,7 +695,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             )
         return {"contract": "telegram-delivery-outbox.v1", "records": records}
 
-    @server.tool(auth=require_scopes("telegram:write"))
+    @server.tool(auth=require_scopes("telegram:write"), annotations=WRITE_ANNOTATIONS)
     async def telegram_write(
         tool: str,
         arguments: dict[str, Any],
