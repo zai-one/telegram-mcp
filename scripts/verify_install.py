@@ -15,13 +15,22 @@ ROOT = Path(__file__).resolve().parents[1]
 NAME = "Telegram"
 PACKAGE = "zai_telegram"
 CHILD = """
-import runpy, socket, sys
+import os, runpy, socket, sys
+# The gate never contacts GitHub: no background update check, no DNS lookup.
+os.environ['TELEGRAM_MCP_DISABLE_UPDATE_CHECK'] = '1'
+LOCAL = {'127.0.0.1', '::1', 'localhost'}
 original = socket.socket.connect
 def local_only(sock, address):
-    if not isinstance(address, tuple) or address[0] not in {'127.0.0.1', '::1', 'localhost'}:
+    if not isinstance(address, tuple) or address[0] not in LOCAL:
         raise RuntimeError('external network disabled in clean-install gate')
     return original(sock, address)
 socket.socket.connect = local_only
+original_resolve = socket.getaddrinfo
+def local_resolve(host, *args, **kwargs):
+    if host not in LOCAL:
+        raise RuntimeError('external DNS disabled in clean-install gate')
+    return original_resolve(host, *args, **kwargs)
+socket.getaddrinfo = local_resolve
 from zai_telegram import server
 class FixtureAdapter:
     def has_account(self, label): return label == 'default'
@@ -73,6 +82,8 @@ async def check():
         await client.call_tool('telegram_acknowledge_poll', {'batch_id': baseline['batch_id']})
         next_batch = (await client.call_tool('telegram_poll_messages', {'chat_ids': ['101']})).data
         assert next_batch['reports'][0]['messages'][0]['message_id'] == 11
+        update = (await client.call_tool('telegram_check_update', {'force': True})).data
+        assert update['status'] == 'disabled' and update['auto_update'] is False
         print(json.dumps({'version': expected_version, 'tools': sorted(tool.name for tool in tools)}))
 asyncio.run(check())
 """

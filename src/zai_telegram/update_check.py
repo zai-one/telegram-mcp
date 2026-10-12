@@ -1,7 +1,11 @@
 """Suggest-only update check against public GitHub releases of zai-one/telegram-mcp.
 
 One unauthenticated HTTPS GET with a short timeout, cached for 24 hours.
-Offline, rate-limited or malformed answers degrade to ``status="unavailable"``.
+Offline, rate-limited or malformed answers degrade to ``status="unavailable"``
+(plus the last good result, if any). Every attempt is recorded in the cache: a
+failed attempt is not repeated for 30 minutes, and ``force`` is honoured only
+when the last attempt is at least 60 seconds old. Only plain version tags
+(``v1.2.3``) and URLs of this repository's releases are ever reported.
 Nothing is ever downloaded or installed; the result only names the command the
 operator may run. Set ``TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1`` to turn the check off.
 """
@@ -9,6 +13,7 @@ operator may run. Set ``TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1`` to turn the check 
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -27,10 +32,19 @@ DISABLE_ENV = "TELEGRAM_MCP_DISABLE_UPDATE_CHECK"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_URL = f"https://github.com/{REPO}/releases"
 CACHE_TTL_SECONDS = 24 * 60 * 60
+FAILURE_BACKOFF_SECONDS = 30 * 60
+FORCE_MIN_INTERVAL_SECONDS = 60
 TIMEOUT_SECONDS = 3.0
 MAX_RESPONSE_BYTES = 1_048_576
-_VERSION = re.compile(r"v?(\d{1,6}(?:\.\d{1,6}){0,3})")
-_CACHE_KEYS = ("checked_at", "latest_version", "release_url", "wheel_url")
+_VERSION_TEXT = r"v?(\d{1,6}(?:\.\d{1,6}){0,3})"
+_VERSION = re.compile(_VERSION_TEXT)
+_RELEASE_PAGE = re.compile(rf"https://github\.com/{re.escape(REPO)}/releases/tag/{_VERSION_TEXT}")
+_WHEEL = re.compile(
+    rf"https://github\.com/{re.escape(REPO)}/releases/download/{_VERSION_TEXT}/[A-Za-z0-9_.+-]{{1,200}}\.whl"
+)
+# One fetch decision and cache write at a time inside this process.
+_LOCK = threading.Lock()
+_RESULT_KEYS = ("checked_at", "latest_version", "release_url", "wheel_url")
 
 Fetcher = Callable[[str, float], bytes]
 
@@ -40,9 +54,10 @@ def disabled() -> bool:
 
 
 def parse_version(value: Any) -> tuple[int, ...] | None:
+    """Parse a plain ``v?N(.N){0,3}`` tag; anything else (spaces, suffixes) is not a release."""
     if not isinstance(value, str):
         return None
-    match = _VERSION.fullmatch(value.strip())
+    match = _VERSION.fullmatch(value)
     return tuple(int(part) for part in match.group(1).split(".")) if match else None
 
 
@@ -64,7 +79,18 @@ def cache_path() -> Path:
     return base / DISTRIBUTION / "update-check.json"
 
 
+def _timestamp(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def _trusted(pattern: re.Pattern[str], value: Any) -> str | None:
+    return value if isinstance(value, str) and pattern.fullmatch(value) else None
+
+
 def _read_cache() -> dict[str, Any] | None:
+    """Return validated cache fields; a bad last result is dropped, attempt times are kept."""
     try:
         path = cache_path()
         if path.stat().st_size > 65_536:
@@ -72,13 +98,46 @@ def _read_cache() -> dict[str, Any] | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if (
-        not isinstance(data, dict)
-        or not isinstance(data.get("checked_at"), int | float)
-        or parse_version(data.get("latest_version")) is None
-    ):
+    if not isinstance(data, dict):
         return None
-    return {key: data.get(key) for key in _CACHE_KEYS}
+    record: dict[str, Any] = {
+        "attempted_at": _timestamp(data.get("attempted_at")),
+        "failed_at": _timestamp(data.get("failed_at")),
+        "checked_at": None,
+        "latest_version": None,
+        "release_url": None,
+        "wheel_url": None,
+    }
+    checked_at, version = _timestamp(data.get("checked_at")), parse_version(data.get("latest_version"))
+    if checked_at is not None and version is not None:
+        record.update(
+            checked_at=checked_at,
+            latest_version=".".join(str(part) for part in version),
+            release_url=_trusted(_RELEASE_PAGE, data.get("release_url")),
+            wheel_url=_trusted(_WHEEL, data.get("wheel_url")),
+        )
+    if record["attempted_at"] is None:
+        record["attempted_at"] = record["checked_at"]
+    return record
+
+
+def _has_result(record: dict[str, Any] | None) -> bool:
+    return record is not None and record.get("latest_version") is not None
+
+
+def _within(stamp: float | None, moment: float, window: float) -> bool:
+    return stamp is not None and 0 <= moment - stamp < window
+
+
+def _fetch_due(record: dict[str, Any] | None, moment: float, *, force: bool) -> bool:
+    """Decide whether one GitHub request is allowed now (shared by tool and startup refresh)."""
+    if record is None:
+        return True
+    if force:
+        return not _within(record["attempted_at"], moment, FORCE_MIN_INTERVAL_SECONDS)
+    if _has_result(record) and _within(record["checked_at"], moment, CACHE_TTL_SECONDS):
+        return False
+    return not _within(record["failed_at"], moment, FAILURE_BACKOFF_SECONDS)
 
 
 def _write_cache(record: dict[str, Any]) -> None:
@@ -116,17 +175,13 @@ def _parse_release(body: bytes) -> dict[str, Any]:
     if version is None:
         raise ValueError("release tag is not a version")
     latest = ".".join(str(part) for part in version)
-    release_url = data.get("html_url")
-    if not isinstance(release_url, str) or not release_url.startswith(f"https://github.com/{REPO}/"):
-        release_url = f"{RELEASES_URL}/tag/{tag}"
+    # ``tag`` passed parse_version, so it is a plain version and safe in a URL.
+    release_url = _trusted(_RELEASE_PAGE, data.get("html_url")) or f"{RELEASES_URL}/tag/{tag}"
     wheel_url = None
-    for asset in data.get("assets") or []:
-        url = asset.get("browser_download_url") if isinstance(asset, dict) else None
-        if (
-            isinstance(url, str)
-            and url.startswith(f"https://github.com/{REPO}/releases/download/")
-            and url.endswith(".whl")
-        ):
+    assets = data.get("assets")
+    for asset in assets if isinstance(assets, list) else []:
+        url = _trusted(_WHEEL, asset.get("browser_download_url") if isinstance(asset, dict) else None)
+        if url is not None:
             wheel_url = url
             break
     return {"latest_version": latest, "release_url": release_url, "wheel_url": wheel_url}
@@ -167,22 +222,27 @@ def check_for_update(
         result["status"] = "disabled"
         return result
     moment = time.time() if now is None else now
-    record = _read_cache()
-    fresh = record is not None and 0 <= moment - record["checked_at"] < CACHE_TTL_SECONDS
-    if force or not fresh:
-        try:
-            fetched = _parse_release((fetch or _default_fetch)(LATEST_RELEASE_API, TIMEOUT_SECONDS))
-        except Exception:  # offline, HTTP error, rate limit, malformed JSON: degrade quietly
-            fetched = None
-        if fetched is not None:
-            record = {"checked_at": moment, **fetched}
+    with _LOCK:
+        record = _read_cache()
+        if _fetch_due(record, moment, force=force):
+            try:
+                fetched = _parse_release((fetch or _default_fetch)(LATEST_RELEASE_API, TIMEOUT_SECONDS))
+            except Exception:  # offline, HTTP error, rate limit, malformed JSON: degrade quietly
+                fetched = None
+            if fetched is not None:
+                record = {"checked_at": moment, **fetched, "attempted_at": moment, "failed_at": None}
+                result["source"] = "github"
+            else:
+                last_good = (
+                    {key: record[key] for key in _RESULT_KEYS} if _has_result(record) else {}
+                )
+                record = {**last_good, "attempted_at": moment, "failed_at": moment}
+                result["source"] = "stale_cache" if last_good else None
             _write_cache(record)
-            result["source"] = "github"
-        elif record is not None:
-            result["source"] = "stale_cache"
-    else:
-        result["source"] = "cache"
-    if record is None:
+        elif _has_result(record):
+            fresh = _within(record["checked_at"], moment, CACHE_TTL_SECONDS)
+            result["source"] = "cache" if fresh else "stale_cache"
+    if not _has_result(record):
         return result
     newer = _is_newer(record["latest_version"], current)
     result.update(
@@ -201,7 +261,7 @@ def cached_update_hint() -> str | None:
     if disabled():
         return None
     record = _read_cache()
-    if record is None or not _is_newer(record["latest_version"], __version__):
+    if not _has_result(record) or not _is_newer(record["latest_version"], __version__):
         return None
     return (
         f"Update available: {DISTRIBUTION} {__version__} -> {record['latest_version']}. "
@@ -211,10 +271,10 @@ def cached_update_hint() -> str | None:
 
 
 def refresh_in_background() -> None:
-    """Refresh a stale cache on a daemon thread so startup never waits on the network."""
-    if disabled():
-        return
-    record = _read_cache()
-    if record is not None and 0 <= time.time() - record["checked_at"] < CACHE_TTL_SECONDS:
+    """Refresh a stale cache on a daemon thread so startup never waits on the network.
+
+    Obeys the same 24 h cache and 30 min failure backoff as ``check_for_update``.
+    """
+    if disabled() or not _fetch_due(_read_cache(), time.time(), force=False):
         return
     threading.Thread(target=check_for_update, name="update-check", daemon=True).start()

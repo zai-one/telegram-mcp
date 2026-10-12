@@ -2,9 +2,12 @@
 
 ## Unreleased
 
-- Telethon 1.44.0 → 1.45.0 (MTProto layer 227 → 229). Constructor signatures of every Telethon request/type used by the embedded runtime are unchanged between the two releases.
+- Telethon 1.44.0 → 1.45.0 (MTProto layer 227 → 229). The change is backward-compatible for the embedded runtime: `types.User`, `types.Channel`, `types.ChatAdminRights` and `types.ChatBannedRights` gained optional trailing keyword arguments; existing calls are unaffected.
 - MCP tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) on every tool, matching the existing `telegram:read`/`telegram:write` split. Hints only; scopes, bindings and the write allowlist still enforce access.
 - `telegram_check_update`: read-only, suggest-only check of the latest GitHub release (3 s timeout, 24 h cache, graceful offline result) with release notes link and update command. A cached newer release adds a one-line hint to the startup MCP instructions; the stale cache is refreshed on a background thread. Opt out with `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1`.
+- Update check hardening: only plain version tags (`v1.2.3`) and URLs of this repository's releases are reported, from GitHub and from the cache; anything else is treated as no release. Every attempt is cached: a failed request is not repeated for 30 minutes and `force=true` is honoured at most once a minute; the startup refresh obeys the same rules.
+- `telegram_check_update` is now registered through the same registrar as the Telegram tools: stdio local scopes, account binding, audit and the per-account quota apply. Name and input schema are unchanged.
+- The clean-install gate disables the update check and blocks external DNS in its server process.
 
 ## 0.3.0
 
