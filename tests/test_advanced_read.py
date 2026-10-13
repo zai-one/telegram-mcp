@@ -77,11 +77,28 @@ async def test_allowlist_blocks_other_chats_and_account_wide_reads(config):
         await client.call_tool(
             "telegram_read", {"tool": "get_pinned_messages", "arguments": {"chat_id": "101"}}
         )
+        await client.call_tool("telegram_read", {"tool": "get_user_status", "arguments": {"user_id": "101"}})
         for bad in (
             {"tool": "get_pinned_messages", "arguments": {"chat_id": "202"}},
             {"tool": "list_contacts", "arguments": {}},
             {"tool": "get_common_chats", "arguments": {"user_id": "999"}},
+            # Allowed user, but the result lists that user's other chats.
+            {"tool": "get_common_chats", "arguments": {"user_id": "101"}},
+            {"tool": "get_contact_chats", "arguments": {"contact_id": "101"}},
         ):
-            with pytest.raises(ToolError):
+            with pytest.raises(ToolError, match="chat_access_denied"):
                 await client.call_tool("telegram_read", bad)
+    assert len(adapter.calls) == 2
+
+
+async def test_denylist_blocks_chat_listing_reads(config):
+    """Common/contact chats of a user would reveal denied chats; refused under any ACL."""
+    adapter = ReadAdapter()
+    surface = build_surface("default,advanced_read", denied_chats=["202"])
+    async with Client(create_server(config, transport="stdio", adapter=adapter, surface=surface)) as client:
+        with pytest.raises(ToolError, match="chat_access_denied"):
+            await client.call_tool(
+                "telegram_read", {"tool": "get_common_chats", "arguments": {"user_id": "7"}}
+            )
+        await client.call_tool("telegram_read", {"tool": "get_user_status", "arguments": {"user_id": "7"}})
     assert len(adapter.calls) == 1

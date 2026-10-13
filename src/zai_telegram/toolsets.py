@@ -185,6 +185,9 @@ ACCOUNT_WIDE_WRITES = frozenset(
         "upload_file",
     }
 )
+# Upstream reads that name one user but return that user's other chats. Under
+# any chat ACL they would list chats outside it, so they are denied.
+CHAT_LISTING_READS = frozenset({"get_common_chats", "get_contact_chats"})
 
 
 def _split(value: str | None) -> list[str]:
@@ -390,6 +393,17 @@ def chat_targets(tool: str, arguments: Mapping[str, Any]) -> list[Any]:
         if isinstance(item, Mapping) and item.get("recipient_ref") is not None:
             targets.append(item["recipient_ref"])
     return targets
+
+
+def read_denied_by_acl(chats: ChatAccess, arguments: Mapping[str, Any]) -> bool:
+    """Fail-closed rule for the generic ``telegram_read`` under a chat ACL.
+
+    Account-wide reads (contacts, drafts, global search) name no chat, and
+    chat-listing reads (common chats of a user) return chats outside the ACL.
+    """
+    if not chats.active:
+        return False
+    return arguments.get("tool") in CHAT_LISTING_READS or not chat_targets("telegram_read", arguments)
 
 
 def write_denied_by_allowlist(chats: ChatAccess, arguments: Mapping[str, Any]) -> bool:

@@ -26,3 +26,5 @@ Prefer a dedicated tool when one exists (inbox, context, search, topics, admins,
 
 With a chat allowlist (`TELEGRAM_ALLOWED_CHATS`) only calls that name a permitted chat/user are allowed;
 account-wide reads (contacts, drafts, global search, folders) are refused with `chat_access_denied`.
+With any chat ACL (allow or deny list), get_common_chats and get_contact_chats are refused too: they list
+the user's other chats, which may be outside the ACL.
