@@ -48,8 +48,30 @@ def _write_new(path: Path, value: str) -> None:
         stream.write(value)
 
 
+UVX_SOURCE = "git+https://github.com/zai-one/telegram-mcp"
+
+
+def _uvx_source() -> str | None:
+    """Running from a throwaway ``uvx`` environment? Then the snippet must call uvx too."""
+    explicit = os.environ.get("ZAI_TELEGRAM_UVX_FROM", "").strip()
+    if explicit:
+        return explicit
+    prefix = sys.prefix.replace("\\", "/")
+    return UVX_SOURCE if "/archive-v" in prefix and "/uv/" in prefix else None
+
+
 def client_config(config: Path, executable: str | None = None) -> dict:
-    """Bind a snippet to this installed interpreter, not the caller's working directory."""
+    """Bind a snippet to this installed interpreter (or uvx), not the caller's working directory."""
+    source = None if executable else _uvx_source()
+    if source:
+        return {
+            "mcpServers": {
+                SERVICE: {
+                    "command": "uvx",
+                    "args": ["--from", source, "zai-telegram-mcp", "--config", str(config.resolve())],
+                }
+            }
+        }
     return {
         "mcpServers": {
             SERVICE: {
