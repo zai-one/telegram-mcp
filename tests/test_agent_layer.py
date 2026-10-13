@@ -180,6 +180,19 @@ def test_token_budget_and_skills():
     assert module.main() == 0
 
 
+async def test_opt_in_capabilities_keep_default_surface_flat(config):
+    from fastmcp import Client
+
+    from zai_telegram.server import create_server
+    from zai_telegram.toolsets import build_surface
+
+    opt_in = {"telegram_read", "telegram_poll_events", "telegram_add_account"}
+    for preset in ("default", "all"):
+        server = create_server(config, transport="stdio", adapter=object(), surface=build_surface(preset))
+        async with Client(server) as client:
+            assert not opt_in & {tool.name for tool in await client.list_tools()}, preset
+
+
 def test_skill_references_mirror_server_guides():
     """Skills are self-contained copies; the server guides must say the same thing."""
     for path in ROOT.glob("skills/*/references/*.md"):

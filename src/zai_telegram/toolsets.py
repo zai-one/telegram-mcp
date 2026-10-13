@@ -65,6 +65,14 @@ TOOLSETS: dict[str, dict[str, Any]] = {
         "description": "Opt-in: generic telegram_read over ~40 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",
         "tools": ("telegram_read",),
     },
+    "event_feed": {
+        "description": "Opt-in: live feed of new/edited/deleted messages (Telethon events, cursor poll).",
+        "tools": ("telegram_poll_events",),
+    },
+    "account_admin": {
+        "description": "Opt-in, stdio only: add an account in chat via QR login (no codes or passwords in chat).",
+        "tools": ("telegram_add_account",),
+    },
     "advanced_write": {
         "description": "Generic telegram_write over the reviewed allowlist, limited to enabled write categories.",
         "tools": ("telegram_write",),
@@ -96,6 +104,7 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
         "press_inline_button",
         "send_sticker",
         "send_gif",
+        "vote_poll",
     ),
     "folders_drafts": (
         "save_draft",
@@ -109,6 +118,7 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
         "unmute_chat",
         "archive_chat",
         "unarchive_chat",
+        "rename_folder",
     ),
     "contacts": (
         "add_contact",
@@ -137,6 +147,11 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
         "import_chat_invite",
         "enable_forum_topics",
         "create_forum_topic",
+        "edit_forum_topic",
+        "delete_forum_topic",
+        "remove_user",
+        "get_invite_link",
+        "export_chat_invite",
     ),
     "channels": ("create_channel", "subscribe_public_channel"),
     "media": ("send_file", "send_album", "download_media", "send_voice", "upload_file"),
@@ -150,9 +165,9 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
 }
 
 DEFAULT_TOOLSETS = ("core", "messages_read", "messages_write", "events", "chat_insights")
-WRITE_TOOLSETS = frozenset({"messages_write", "advanced_write"} | set(WRITE_CATEGORIES))
+WRITE_TOOLSETS = frozenset({"messages_write", "advanced_write", "account_admin"} | set(WRITE_CATEGORIES))
 # Opt-in toolsets are never part of "all": name them explicitly (token budget).
-OPT_IN_TOOLSETS = frozenset({"advanced_read"})
+OPT_IN_TOOLSETS = frozenset({"advanced_read", "event_feed", "account_admin"})
 KNOWN_TOOLSETS = tuple(TOOLSETS) + tuple(name for name in WRITE_CATEGORIES if name not in TOOLSETS)
 ALL_TOOLSETS = tuple(name for name in KNOWN_TOOLSETS if name not in OPT_IN_TOOLSETS)
 KNOWN_TOOLS = frozenset(tool for spec in TOOLSETS.values() for tool in spec["tools"])
@@ -188,11 +203,12 @@ ACCOUNT_WIDE_WRITES = frozenset(
         "set_privacy_settings",
         "set_bot_commands",
         "upload_file",
+        "rename_folder",
     }
 )
 # Upstream reads that name one user but return that user's other chats. Under
 # any chat ACL they would list chats outside it, so they are denied.
-CHAT_LISTING_READS = frozenset({"get_common_chats", "get_contact_chats"})
+CHAT_LISTING_READS = frozenset({"get_common_chats", "get_contact_chats", "export_unread_messages"})
 
 
 def _split(value: str | None) -> list[str]:

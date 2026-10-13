@@ -13,9 +13,11 @@ from fastmcp import FastMCP
 from fastmcp.server.auth.providers.jwt import JWTVerifier
 
 from zai_telegram import __version__
+from zai_telegram.account_login import register_account_login
 from zai_telegram.agent_layer import TOOL_DESCRIPTIONS, TOOL_TITLES, build_instructions, register_agent_layer
 from zai_telegram.config import SELECTED_ACCOUNT, ServiceConfig
 from zai_telegram.errors import policy_error
+from zai_telegram.feed import register_feed
 from zai_telegram.onboarding import check_config, load_config
 from zai_telegram.polling import register_polling
 from zai_telegram.runtime import Runtime
@@ -178,6 +180,8 @@ def create_server(
     register_tools(registrar, runtime)
     register_polling(registrar, runtime)
     register_update_check(registrar, runtime)
+    register_feed(registrar, runtime, surface)
+    register_account_login(registrar, runtime)
     if config.multi_account:
         register_accounts(registrar, runtime)
     register_agent_layer(server, surface)

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Opt-in toolset `event_feed`: `telegram_poll_events` — live feed of new / edited / deleted messages from Telethon `NewMessage` / `MessageEdited` / `MessageDeleted` handlers, one bounded in-memory ring per account (2000 events), client-held cursor bound to the account, `wait_seconds` 0–55, `chat_ids` / `kinds` filters, `gap=true` on restart or overflow. Chat ACL applied per event; deletions without a chat (private chats, basic groups) are hidden while an ACL is set. Nothing persisted. Guide `telegram://guide/events`.
+- Opt-in toolset `account_admin` (stdio, `telegram:write` scope): `telegram_add_account` — QR login in chat (no phone/code/2FA password through the chat; 2FA → local wizard). Writes `TELEGRAM_SESSION_STRING_<LABEL>` atomically to the private secret file, never overwrites, grants the label in `TELEGRAM_BINDINGS_FILE`; restart activates.
+- Competitor parity without re-pinning the vendor (`zai_telegram/native.py`): reads via `telegram_read` — `get_message_by_link`, `export_unread_messages`, `get_send_as`, `get_member_admin_status`, `transcribe_voice`, plus vendor `export_contacts`; writes via `telegram_write` (ledger, categories, ACL) — `vote_poll`, `remove_user`, `edit_forum_topic`, `delete_forum_topic`, `rename_folder`, plus vendor `get_invite_link` / `export_chat_invite` (category `groups_admin`).
+- Router: same lines, now also routing live feed and add-account; default/all always-loaded context stays at or below 0.5.0 (enforced by `scripts/token_budget.py`). Router eval: 34 cases, optional upstream-tool check.
+
 ## 0.5.0
 
 - License: LicenseRef-ZAI-ONE 2.0 (source-available). Free install and use for yourself and your organisation, including commercial work; issues and pull requests welcome; copying code into other projects, redistribution, embedding and competing hosted services need written permission. Earlier releases keep their LicenseRef-ZAI-ONE 1.0 terms (see NOTICE). README first screen: one-line scope, why this MCP, maintenance and update check.
