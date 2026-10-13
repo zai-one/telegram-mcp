@@ -13,6 +13,8 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
+from zai_telegram import __version__
+
 PACKAGE = "zai_telegram"
 SERVICE = "telegram"
 
@@ -48,7 +50,8 @@ def _write_new(path: Path, value: str) -> None:
         stream.write(value)
 
 
-UVX_SOURCE = "git+https://github.com/zai-one/telegram-mcp"
+# Pinned to the release tag of this installed version, so a generated entry does not float to main.
+UVX_SOURCE = f"git+https://github.com/zai-one/telegram-mcp@v{__version__}"
 
 
 def _uvx_source() -> str | None:

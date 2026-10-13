@@ -115,13 +115,14 @@ def test_packaged_template_matches_documented_template():
 
 
 def test_uvx_snippet_when_running_from_uvx(tmp_path, monkeypatch):
-    from zai_telegram import setup
+    from zai_telegram import __version__, setup
 
     config = tmp_path / "mcp.local.json"
     monkeypatch.setattr(setup.sys, "prefix", "/home/u/.cache/uv/archive-v0/abc")
     entry = setup.client_config(config)["mcpServers"][setup.SERVICE]
     assert entry["command"] == "uvx"
     assert entry["args"][:3] == ["--from", setup.UVX_SOURCE, "zai-telegram-mcp"]
+    assert setup.UVX_SOURCE.endswith(f"/zai-one/telegram-mcp@v{__version__}")
     assert setup.client_config(config, "/py")["mcpServers"][setup.SERVICE]["command"] == "/py"
     monkeypatch.setenv("ZAI_TELEGRAM_UVX_FROM", "zai-telegram-mcp==0.5.0")
     monkeypatch.setattr(setup.sys, "prefix", "/usr")
