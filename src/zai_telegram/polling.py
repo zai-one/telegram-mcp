@@ -270,7 +270,7 @@ def register_polling(server, runtime):
         max_wait_seconds: int = 50,
         max_per_chat: int = 20,
     ) -> dict:
-        """Debounced wait: block until a chat goes quiet for settle_seconds after new messages, or max_wait ends."""
+        """Debounced wait: quiet settle_seconds after new messages, or max_wait ends."""
         if type(settle_seconds) is not int or not SETTLE_MIN_SECONDS <= settle_seconds <= SETTLE_MAX_SECONDS:
             raise ValueError(
                 f"settle_seconds must be between {SETTLE_MIN_SECONDS} and {SETTLE_MAX_SECONDS}"
