@@ -45,6 +45,23 @@ class ToolRegistrar:
     def __init__(self, server: FastMCP, runtime: Runtime, surface: Surface | None = None):
         self.server, self.runtime = server, runtime
         self.surface = surface or build_surface()
+        # (function, options) of every exposed tool, to re-expose with ``account``.
+        self.registrations: list[tuple[Callable[..., Any], dict[str, Any]]] = []
+
+    async def enable_account_selection(self) -> None:
+        """Re-register exposed tools with the optional ``account`` argument, add
+        ``telegram_list_accounts`` and tell the client its tool list changed."""
+        for function, options in list(self.registrations):
+            self.tool(**options)(function)
+        if not any(function.__name__ == "telegram_list_accounts" for function, _ in self.registrations):
+            register_accounts(self, self.runtime)
+        try:
+            from fastmcp.server.dependencies import get_context
+            from mcp import types as mcp_types
+
+            await get_context().send_notification(mcp_types.ToolListChangedNotification())
+        except Exception:  # noqa: BLE001 - no active session: clients see it on next tools/list
+            pass
 
     def _admit(self, name: str, arguments: dict[str, Any]) -> None:
         """Toolset write-category and per-chat ACL checks, before any provider call."""
@@ -83,8 +100,10 @@ class ToolRegistrar:
                     self.runtime.authorize(function.__name__)
                 except PermissionError:
                     return function
+            if not any(existing is function for existing, _ in self.registrations):
+                self.registrations.append((function, dict(options)))
             signature = inspect.signature(function)
-            multi = self.runtime.config.multi_account and name not in ACCOUNTLESS_TOOLS
+            multi = self.runtime.account_selection and name not in ACCOUNTLESS_TOOLS
             public_signature = signature
             if multi:
                 # Per-call account selection, only when some principal has >1
@@ -156,6 +175,8 @@ def create_server(
     )
     runtime = Runtime(config, transport, adapter)
     surface = surface or surface_from_env()
+    # account_admin can add accounts at runtime: expose account selection up front.
+    runtime.account_selection = config.multi_account or "telegram_add_account" in surface.tools
 
     @asynccontextmanager
     async def lifespan(server):
@@ -174,15 +195,17 @@ def create_server(
         version=__version__,
         auth=auth,
         mask_error_details=True,
+        on_duplicate="replace",
         lifespan=lifespan,
     )
     registrar = ToolRegistrar(server, runtime, surface)
+    runtime.on_account_selection = registrar.enable_account_selection
     register_tools(registrar, runtime)
     register_polling(registrar, runtime)
     register_update_check(registrar, runtime)
     register_feed(registrar, runtime, surface)
     register_account_login(registrar, runtime)
-    if config.multi_account:
+    if runtime.account_selection:
         register_accounts(registrar, runtime)
     register_agent_layer(server, surface)
     return server

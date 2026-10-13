@@ -10,9 +10,9 @@ Safety model:
   atomic replace) under ``TELEGRAM_SESSION_STRING_<LABEL>``; it is never returned.
   An existing label is never overwritten. The bound principal is granted the new
   label in the bindings file when ``TELEGRAM_BINDINGS_FILE`` is set.
-* Hot activation: on a multi-account server the new client joins the loaded
-  runtime and the label is granted in the live config (no restart). A
-  single-account server needs a restart to expose the ``account`` argument.
+* Hot activation: the new client joins the loaded runtime and the label is
+  granted in the live config; with ``account_admin`` every tool already takes
+  ``account``, so no restart is needed. Restart only if activation fails.
 """
 
 from __future__ import annotations
@@ -97,12 +97,13 @@ async def _activate(runtime: Any, actor: str, label: str, granted: bool) -> dict
             active = True
         except Exception:  # noqa: BLE001 - never leak provider detail; fall back to restart
             active = False
-    selectable = active and granted and runtime.grant_account(actor, label)
+    selectable = active and runtime.grant_account(actor, label)
     if selectable:
         return {
             "status": "added",
             "label": label,
             "granted": True,
+            "binding_saved": granted,
             "active": True,
             "restart_required": False,
             "next": f"Use account={label} now (see telegram_list_accounts).",
@@ -120,6 +121,12 @@ async def _activate(runtime: Any, actor: str, label: str, granted: bool) -> dict
 class LoginSessions:
     def __init__(self) -> None:
         self.pending: dict[str, dict[str, Any]] = {}
+
+    async def sweep(self) -> None:
+        """Disconnect abandoned QR logins (no status/cancel within the TTL)."""
+        for actor, entry in list(self.pending.items()):
+            if time.time() - entry["at"] > _PENDING_TTL:
+                await self.cancel(actor)
 
     async def cancel(self, actor: str) -> None:
         entry = self.pending.pop(actor, None)
@@ -151,6 +158,7 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
             raise ValueError("label must match [a-z][a-z0-9_]{0,31}")
         actor = runtime.current_access().principal_id
         config = runtime.config
+        await sessions.sweep()
         if action == "cancel":
             await sessions.cancel(actor)
             return {"status": "cancelled", "label": label}
@@ -201,7 +209,7 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
                     "`zai-telegram-mcp-setup --add-account "
                     + label
                     + " --directory <setup dir> --qr` in a terminal "
-                    "(the password is typed there, hidden), then restart the MCP server."
+                    "(the password is typed there, hidden); the running server picks it up."
                 ),
             }
         except TimeoutError:

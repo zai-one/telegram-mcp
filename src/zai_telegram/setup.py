@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> None:
                 "locally; existing sessions were not changed."
             ) from None
         print(
-            f"Added account '{args.add_account}'. Restart the MCP server, "
+            f"Added account '{args.add_account}'. A running MCP server picks it up on its next call; "
             f"then pass account={args.add_account}."
         )
         return

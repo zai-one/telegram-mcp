@@ -148,7 +148,7 @@ async def test_hot_activation_on_multi_account_server(config, monkeypatch, tmp_p
     assert srv  # module patched by make_server
 
 
-async def test_single_account_server_saves_but_needs_restart(config, monkeypatch):
+async def test_without_hot_activation_restart_is_required(config, monkeypatch):
     async def activate(label):
         return True
 
@@ -179,6 +179,7 @@ async def test_adapter_hot_activation_requires_pure_addition(config, monkeypatch
 
     runtime = SimpleNamespace(clients={"default": object()}, _build_client=lambda s, label: NewClient())
     adapter._runtime = runtime
+    adapter._active_secret = dict(base)
     monkeypatch.setattr(module, "_PROCESS_FINGERPRINT", adapter._fingerprint(base))
     monkeypatch.setattr(module.os, "environ", {})
     import telethon.sessions

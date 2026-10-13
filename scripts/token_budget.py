@@ -16,11 +16,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # +wait_for_new_message / wait_for_settled_message (events) ~600 B each; grow only with default tools.
-BUDGET_BYTES = {"default": 12_400, "all": 13_200, "all,advanced_read,event_feed,account_admin": 15_400}
+BUDGET_BYTES = {"default": 12_400, "all": 13_200, "all,advanced_read,event_feed,account_admin": 17_800}
 # Always-loaded agent context = instructions + tools/list + every skill frontmatter.
 # Estimated tokens = bytes / 4 (conservative for JSON/English; Russian costs more,
 # but frontmatters are mostly English). Budget per preset.
-CONTEXT_TOKEN_BUDGET = {"default": 4_200, "all": 4_400, "all,advanced_read,event_feed,account_admin": 4_900}
+CONTEXT_TOKEN_BUDGET = {"default": 4_200, "all": 4_400, "all,advanced_read,event_feed,account_admin": 5_450}
+# account_admin adds the optional `account` argument to every tool (opt-in only).
 # Flat default: v0.5.0 always-loaded context (tokens). Opt-in capabilities (event feed,
 # QR add-account, telegram_read/telegram_write parity names) must not raise these.
 FLAT_BASELINE_TOKENS = {"default": 4_076, "all": 4_264}
