@@ -28,7 +28,7 @@
     },
     "telegram_mcp/runtime.py": {
       "patched_upstream_sha256": "152b71aec6d1ec179a53fe37dcefef67bd13aa0748d2906d576a4cd588722c80",
-      "packaged_sha256": "86387a4c443cc85021d1c5b03a86f3e79040754cdd8af94e5eb146adb46bd633"
+      "packaged_sha256": "dcbececf0cee0db2b8ffb99af8339d7b12c4ad96031674b879dbb49b4e95367d"
     },
     "telegram_mcp/tools/__init__.py": {
       "patched_upstream_sha256": "4d71f28a488475f40d4402bf6275b9d01f28af2f04c08093f64b7ca2aebdeeaa",
@@ -64,7 +64,7 @@
     },
     "telegram_mcp/tools/messages.py": {
       "patched_upstream_sha256": "912bdfcbee79c14fc4f1690cbd84f06470cc7d17fb088ed859a16284436e042d",
-      "packaged_sha256": "01e1e0f9bf3b351c2e19ad66ec3d1748d0efa2b522cfc5c5bb8a54138b5e0647"
+      "packaged_sha256": "8d042d80cbca8b436d386bfc3b5595ab908cce169f3cf1e4bffe53d7e854a2f3"
     },
     "telegram_mcp/tools/profile.py": {
       "patched_upstream_sha256": "07c5c7e472816a1176ba3c4e87894e904d9db6f250ffd2896321952aaf04f50e",
@@ -75,5 +75,15 @@
     "tools/media.py: get_gif_search uses @gif inline query (SearchGifsRequest does not exist in Telethon)",
     "tools/contacts.py: import_contacts uses types.InputPhoneContact",
     "tools/chats.py: read-only get_chat_stats (Telethon get_stats -> stats.getBroadcastStats/getMegagroupStats summary)"
-  ]
+  ],
+  "backports": {
+    "patch": "vendor/patches/zai-backports-2026-10.patch",
+    "upstream_commits": [
+      "2980601",
+      "dd71a12",
+      "312cd00",
+      "7fc6b4a"
+    ],
+    "sha256": "81f34a90a854340d7096fe63fd55e59918ebac6ef4c65a6aa26b9e3979952274"
+  }
 }
