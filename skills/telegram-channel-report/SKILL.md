@@ -12,7 +12,8 @@ metadata:
 1. Resolve the channel: `telegram_list_chats` or `telegram_resolve_recipient`; never guess ids.
 2. `telegram_get_chat_stats(chat_id)` - current vs previous values for the period Telegram reports.
 3. `telegram_get_messages(chat_id, page_size=20)` - recent posts for topics and dates.
-4. Fill `templates/channel-report.md`; compute deltas as (current - previous) / previous, mark "n/a" when previous is 0.
+4. Forum groups: `telegram_list_topics(chat_id)` for per-topic activity; who runs it: `telegram_get_admins(chat_id)`.
+5. Fill `templates/channel-report.md`; compute deltas as (current - previous) / previous, mark "n/a" when previous is 0.
 
 Guardrails
 - Stats need admin rights and Telegram's can_view_stats (large enough channels); on failure say so instead of estimating.

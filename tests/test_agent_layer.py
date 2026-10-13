@@ -9,7 +9,7 @@ from test_runtime import FixtureAdapter
 
 from zai_telegram.agent_layer import GUIDE_TOPICS, TOOL_DESCRIPTIONS, guide
 from zai_telegram.server import create_server
-from zai_telegram.toolsets import ALL_TOOLS, build_surface, surface_from_env
+from zai_telegram.toolsets import ALL_TOOLS, KNOWN_TOOLS, build_surface, surface_from_env
 
 ROOT = Path(__file__).resolve().parents[1]
 SEND = {"chat_id": "101", "message": "synthetic content", "idempotency_key": "stable"}
@@ -153,7 +153,7 @@ async def test_router_resources_and_prompts(config):
     server = create_server(
         config, transport="stdio", adapter=FixtureAdapter(), surface=build_surface("default")
     )
-    assert len(server.instructions) <= 1200 and "telegram-safe-send" in server.instructions
+    assert len(server.instructions) <= 1300 and "telegram-safe-send" in server.instructions
     async with Client(server) as client:
         toolsets = json.loads((await client.read_resource("telegram://toolsets"))[0].text)
         assert (
@@ -169,7 +169,7 @@ async def test_router_resources_and_prompts(config):
 
 
 def test_descriptions_and_titles_cover_every_tool():
-    assert set(TOOL_DESCRIPTIONS) == set(ALL_TOOLS)
+    assert set(TOOL_DESCRIPTIONS) == set(KNOWN_TOOLS)
     assert all(len(text) <= 300 for text in TOOL_DESCRIPTIONS.values())
 
 

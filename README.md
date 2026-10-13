@@ -42,6 +42,24 @@ Try asking your assistant:
 
 ## Quick start
 
+### One minute with uvx
+
+Needs only [uv](https://docs.astral.sh/uv/getting-started/installation/) and an API ID/hash from [my.telegram.org](https://my.telegram.org/apps).
+
+```sh
+uvx --from git+https://github.com/zai-one/telegram-mcp zai-telegram-mcp-setup --directory ~/telegram-mcp
+```
+
+The wizard logs you in interactively, stores secrets in private files and writes `mcp-client.json` (a ready `uvx` entry) into that directory. Paste its `mcpServers` block into Claude Desktop / Cursor, or for Claude Code:
+
+```sh
+claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp zai-telegram-mcp --config ~/telegram-mcp/mcp.local.json
+```
+
+Then ask: *"What's new in my Telegram? Don't mark anything read."* An npm/`npx` shim is not provided: it would still need Python/uv, so uvx is the shortest path.
+
+### From a clone
+
 Prefer a ready package? [Install the release and generate your client configuration](INSTALL.md#install-a-release-package). No source checkout is required.
 
 Install **Python 3.12–3.14** and [uv](https://docs.astral.sh/uv/getting-started/installation/). Clone with Git or [download the ZIP](https://github.com/zai-one/telegram-mcp/archive/refs/heads/main.zip). With a ZIP, open the extracted directory and skip the first two commands.
@@ -125,7 +143,7 @@ Nothing changes unless you set these variables (default: every tool, every chat)
 | `TELEGRAM_DENIED_CHATS` | Always denied. |
 | `TELEGRAM_RESPONSE_DETAIL` | `full` (default, unchanged) or `summary`: drops empty fields and cuts message texts to `TELEGRAM_MAX_TEXT_CHARS` (default 500) with `message_truncated`/`message_length`. |
 
-Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (`telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats`), `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
+Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (`telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats`), opt-in `advanced_read` (generic `telegram_read` over ~40 reviewed Telethon reads: participants, pinned, reactions, read-by, folders, drafts, profiles; never part of `all`, enable with `TELEGRAM_TOOLSETS=all,advanced_read`; list in `telegram://guide/advanced-read`), `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
 
 ### Several accounts and waiting for replies
 

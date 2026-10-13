@@ -183,14 +183,16 @@ def main():
             env[prefix + "_SECRET_FILE"] = private(cwd / "synthetic.env", secret)
         config = cwd / "mcp.local.json"
         config.write_text(json.dumps({"env": env}), encoding="utf-8")
-        setup_command = next(name for name in project['scripts'] if name.endswith('-setup'))
-        executable = environment / ('Scripts' if os.name == 'nt' else 'bin') / (
-            setup_command + ('.exe' if os.name == 'nt' else '')
+        setup_command = next(name for name in project["scripts"] if name.endswith("-setup"))
+        executable = (
+            environment
+            / ("Scripts" if os.name == "nt" else "bin")
+            / (setup_command + (".exe" if os.name == "nt" else ""))
         )
-        snippet = json.loads(run([str(executable), '--directory', str(cwd), '--client-only'], cwd=cwd))
-        entry = next(iter(snippet['mcpServers'].values()))
-        assert Path(entry['command']).resolve() == python.resolve()
-        assert entry['args'] == ['-m', PACKAGE, '--config', str(config.resolve())]
+        snippet = json.loads(run([str(executable), "--directory", str(cwd), "--client-only"], cwd=cwd))
+        entry = next(iter(snippet["mcpServers"].values()))
+        assert Path(entry["command"]).resolve() == python.resolve()
+        assert entry["args"] == ["-m", PACKAGE, "--config", str(config.resolve())]
         minimum = {
             "Keysso": 1,
             "Topvisor": 18,

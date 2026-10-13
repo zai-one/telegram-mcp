@@ -40,6 +40,24 @@
 
 ## Установка
 
+### За минуту через uvx
+
+Нужны только [uv](https://docs.astral.sh/uv/getting-started/installation/) и API ID/hash с [my.telegram.org](https://my.telegram.org/apps).
+
+```sh
+uvx --from git+https://github.com/zai-one/telegram-mcp zai-telegram-mcp-setup --directory ~/telegram-mcp
+```
+
+Мастер интерактивно выполнит вход, сохранит секреты в закрытые файлы и создаст `mcp-client.json` с готовой записью `uvx`. Вставьте блок `mcpServers` в Claude Desktop / Cursor, а для Claude Code:
+
+```sh
+claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp zai-telegram-mcp --config ~/telegram-mcp/mcp.local.json
+```
+
+Первый запрос: *«Что нового в Telegram? Ничего не помечай прочитанным».* Дополнительные чтения (участники, закреплённые, реакции, папки, профили) — набор `advanced_read` (`TELEGRAM_TOOLSETS=all,advanced_read`), он не входит в `all`.
+
+### Из исходников
+
 Хотите установить готовый пакет? [Установка релиза и создание конфигурации клиента](INSTALL.md#install-a-release-package) работают без клонирования исходников.
 
 Нужны **Python 3.12–3.14** и [uv](https://docs.astral.sh/uv/getting-started/installation/). Можно клонировать проект через Git или [скачать ZIP](https://github.com/zai-one/telegram-mcp/archive/refs/heads/main.zip). Для ZIP откройте распакованный каталог и пропустите первые две команды.

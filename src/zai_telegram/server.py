@@ -28,6 +28,7 @@ from zai_telegram.toolsets import (
     chat_targets,
     compact,
     filter_result,
+    read_denied_by_acl,
     surface_from_env,
     write_denied_by_allowlist,
 )
@@ -55,6 +56,9 @@ class ToolRegistrar:
         chats = self.surface.chats
         if name == "telegram_write" and write_denied_by_allowlist(chats, arguments):
             # Account-wide or untargeted writes would bypass the allowlist.
+            raise policy_error("chat_access_denied")
+        if name == "telegram_read" and read_denied_by_acl(chats, arguments):
+            # Account-wide or chat-listing reads would bypass the ACL.
             raise policy_error("chat_access_denied")
         if chats.active and any(not chats.permits(target) for target in chat_targets(name, arguments)):
             raise policy_error("chat_access_denied")
