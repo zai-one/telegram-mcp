@@ -88,6 +88,57 @@ async def test_chat_allowlist_denies_by_default_and_filters_listings(config):
     assert "101" in json.dumps(listed)
 
 
+async def test_chat_allowlist_denies_untargeted_and_account_wide_generic_writes(config):
+    """Regression: telegram_write calls that name no allowed chat must fail closed."""
+    surface = build_surface(allowed_chats=["101", "@team"])
+    adapter = FixtureAdapter()
+    denied = (
+        ("join_chat_by_link", {"link": "https://t.me/+abc"}),
+        ("import_chat_invite", {"hash": "abc"}),
+        ("subscribe_public_channel", {"channel": "@other"}),
+        ("block_user", {"user_id": "7"}),
+        ("unblock_user", {"user_id": 7}),
+        ("delete_contact", {"user_id": "7"}),
+        ("create_group", {"title": "x", "user_ids": ["101"]}),
+        ("create_channel", {"title": "x"}),
+        ("update_profile", {"about": "x"}),
+        ("set_privacy_settings", {"key": "phone", "allow_users": ["101"]}),
+        ("create_folder", {"title": "x", "chat_ids": ["101"], "groups": True}),
+        ("add_contact", {"phone": "+1", "first_name": "x", "username": "team"}),
+        ("send_message", {"message": "no chat named"}),
+    )
+    allowed = (
+        ("mute_chat", {"chat_id": "101"}),
+        ("delete_contact", {"user_id": "101"}),
+        ("block_user", {"user_id": 101}),
+        ("subscribe_public_channel", {"channel": "@Team"}),
+        # A user inside a named allowed chat is a member of that chat.
+        ("ban_user", {"chat_id": "101", "user_id": "7"}),
+    )
+    async with Client(create_server(config, transport="stdio", adapter=adapter, surface=surface)) as client:
+        for index, (tool, args) in enumerate(denied):
+            with pytest.raises(ToolError, match="chat_access_denied"):
+                await client.call_tool(
+                    "telegram_write", {"tool": tool, "arguments": args, "idempotency_key": f"d{index}"}
+                )
+        for index, (tool, args) in enumerate(allowed):
+            await client.call_tool(
+                "telegram_write", {"tool": tool, "arguments": args, "idempotency_key": f"a{index}"}
+            )
+    assert [call[0] for call in adapter.calls] == [tool for tool, _ in allowed]
+
+
+async def test_denylist_applies_to_user_targets_of_generic_writes(config):
+    surface = build_surface(denied_chats=["7"])
+    adapter = FixtureAdapter()
+    async with Client(create_server(config, transport="stdio", adapter=adapter, surface=surface)) as client:
+        with pytest.raises(ToolError, match="chat_access_denied"):
+            await client.call_tool("telegram_write", {"tool": "block_user", "arguments": {"user_id": "7"}})
+        # Denylist-only mode keeps account-wide writes available (no allowlist to escape).
+        await client.call_tool("telegram_write", {"tool": "update_profile", "arguments": {"about": "x"}})
+    assert [call[0] for call in adapter.calls] == ["update_profile"]
+
+
 async def test_denylist_filters_records(config):
     surface = build_surface(denied_chats=["101"])
     async with Client(

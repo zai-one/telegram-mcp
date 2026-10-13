@@ -105,7 +105,7 @@ Nothing changes unless you set these variables (default: every tool, every chat)
 | `TELEGRAM_TOOLSETS` | `all` (default), `default` (= core, messages_read, messages_write, events) or a comma list. Also `--toolsets`. |
 | `TELEGRAM_TOOLS` / `TELEGRAM_DISABLED_TOOLS` | Add or hide individual tools. |
 | `TELEGRAM_READ_ONLY=1` | Hide every write tool (also `--read-only`). |
-| `TELEGRAM_ALLOWED_CHATS` | Comma list of chat ids / @usernames. When set, every other chat is denied and hidden from listings. |
+| `TELEGRAM_ALLOWED_CHATS` | Comma list of chat ids / @usernames. When set, every other chat is denied and hidden from listings, and calls that name no allowed chat (account-wide writes such as joining by link, creating groups, profile or privacy changes) are denied. |
 | `TELEGRAM_DENIED_CHATS` | Always denied. |
 
 Toolsets: `core`, `messages_read`, `messages_write`, `events`, `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).

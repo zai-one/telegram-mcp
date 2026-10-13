@@ -27,6 +27,7 @@ from zai_telegram.toolsets import (
     chat_targets,
     filter_result,
     surface_from_env,
+    write_denied_by_allowlist,
 )
 from zai_telegram.transport import LocalPreDispatchDenied, ProviderAdmissionDenied
 from zai_telegram.update_check import cached_update_hint, check_for_update, refresh_in_background
@@ -42,6 +43,9 @@ class ToolRegistrar:
         if name == "telegram_write" and arguments.get("tool") not in self.surface.write_tools:
             raise policy_error("tool_disabled")
         chats = self.surface.chats
+        if name == "telegram_write" and write_denied_by_allowlist(chats, arguments):
+            # Account-wide or untargeted writes would bypass the allowlist.
+            raise policy_error("chat_access_denied")
         if chats.active and any(not chats.permits(target) for target in chat_targets(name, arguments)):
             raise policy_error("chat_access_denied")
 

@@ -143,6 +143,33 @@ WRITE_TOOL_NAMES = frozenset(TOOLSETS["messages_write"]["tools"] + TOOLSETS["adv
 
 # Argument names that address a chat; checked against the chat ACL.
 CHAT_ARGUMENTS = ("chat_id", "to_chat_id", "from_chat_id", "group_id", "channel_id", "peer")
+# Upstream write arguments that address a person or a public channel. When a
+# write names no chat, these are its target (the private chat / the channel);
+# when it names a chat, the users are members of that chat and the chat governs.
+WRITE_PEER_ARGUMENTS = ("user_id", "user_ids", "channel")
+# Upstream writes that act on the account or create/join chats outside any
+# allowlist entry (new group/channel, invite links, profile, privacy, folders
+# spanning chat types, bot commands, contacts import). With an allowlist set
+# they are denied even when an argument happens to match an allowed chat.
+ACCOUNT_WIDE_WRITES = frozenset(
+    {
+        "create_group",
+        "create_channel",
+        "join_chat_by_link",
+        "import_chat_invite",
+        "create_folder",
+        "delete_folder",
+        "reorder_folders",
+        "add_contact",
+        "import_contacts",
+        "update_profile",
+        "set_profile_photo",
+        "delete_profile_photo",
+        "set_privacy_settings",
+        "set_bot_commands",
+        "upload_file",
+    }
+)
 
 
 def _split(value: str | None) -> list[str]:
@@ -314,11 +341,30 @@ def chat_targets(tool: str, arguments: Mapping[str, Any]) -> list[Any]:
         targets.append(value)
     nested = arguments.get("arguments")
     if tool == "telegram_write" and isinstance(nested, Mapping):
-        targets.extend(chat_targets("upstream", nested))
+        named = chat_targets("upstream", nested)
+        if not named:
+            for name in WRITE_PEER_ARGUMENTS:
+                value = nested.get(name)
+                if isinstance(value, list | tuple):
+                    named.extend(item for item in value if item is not None)
+                elif value is not None and value != "":
+                    named.append(value)
+        targets.extend(named)
     for item in arguments.get("items") or ():
         if isinstance(item, Mapping) and item.get("recipient_ref") is not None:
             targets.append(item["recipient_ref"])
     return targets
+
+
+def write_denied_by_allowlist(chats: ChatAccess, arguments: Mapping[str, Any]) -> bool:
+    """Fail-closed rule for the generic ``telegram_write`` under an allowlist.
+
+    A write whose target cannot be matched to an allowed chat (no chat, user or
+    channel named, or an account-wide/chat-creating tool) is denied.
+    """
+    if chats.allowed is None:
+        return False
+    return arguments.get("tool") in ACCOUNT_WIDE_WRITES or not chat_targets("telegram_write", arguments)
 
 
 _RESULT_LISTS = ("results", "chats", "candidates")
