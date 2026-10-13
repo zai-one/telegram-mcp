@@ -47,6 +47,10 @@ TOOLSETS: dict[str, dict[str, Any]] = {
             "telegram_outbox_status",
         ),
     },
+    "chat_insights": {
+        "description": "Forum topics, admins, channel/supergroup statistics.",
+        "tools": ("telegram_list_topics", "telegram_get_admins", "telegram_get_chat_stats"),
+    },
     "events": {
         "description": "Cursor-based polling of selected chats without read receipts.",
         "tools": ("telegram_poll_messages", "telegram_acknowledge_poll"),
@@ -135,7 +139,7 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
     ),
 }
 
-DEFAULT_TOOLSETS = ("core", "messages_read", "messages_write", "events")
+DEFAULT_TOOLSETS = ("core", "messages_read", "messages_write", "events", "chat_insights")
 WRITE_TOOLSETS = frozenset({"messages_write", "advanced_write"} | set(WRITE_CATEGORIES))
 ALL_TOOLSETS = tuple(TOOLSETS) + tuple(name for name in WRITE_CATEGORIES if name not in TOOLSETS)
 ALL_TOOLS = frozenset(tool for spec in TOOLSETS.values() for tool in spec["tools"])
@@ -220,6 +224,9 @@ class Surface:
     write_tools: frozenset[str] = frozenset(TELEGRAM_WRITE_ALLOWLIST)
     read_only: bool = False
     chats: ChatAccess = field(default_factory=ChatAccess)
+    # "full" (default, unchanged payloads) or "summary" (compact; see compact()).
+    detail: str = "full"
+    max_text_chars: int = 500
 
     def exposes(self, tool: str) -> bool:
         return tool in self.tools
@@ -228,6 +235,8 @@ class Surface:
         return {
             "active": list(self.toolsets),
             "read_only": self.read_only,
+            "detail": self.detail,
+            "max_text_chars": self.max_text_chars,
             "chat_acl": {
                 "mode": "allowlist"
                 if self.chats.allowed is not None
@@ -254,6 +263,8 @@ class Surface:
                 "TELEGRAM_READ_ONLY": "1 hides every write",
                 "TELEGRAM_ALLOWED_CHATS": "ids/@usernames; set = deny others",
                 "TELEGRAM_DENIED_CHATS": "ids/@usernames always denied",
+                "TELEGRAM_RESPONSE_DETAIL": "full (default) | summary: drop empty fields, truncate long texts",
+                "TELEGRAM_MAX_TEXT_CHARS": "summary mode text limit (default 500)",
             },
         }
 
@@ -269,7 +280,13 @@ def build_surface(
     read_only: bool = False,
     allowed_chats: Iterable[str] | None = None,
     denied_chats: Iterable[str] = (),
+    detail: str = "full",
+    max_text_chars: int = 500,
 ) -> Surface:
+    if detail not in {"full", "summary"}:
+        raise ValueError("TELEGRAM_RESPONSE_DETAIL must be full or summary")
+    if not 50 <= max_text_chars <= 4096:
+        raise ValueError("TELEGRAM_MAX_TEXT_CHARS must be 50..4096")
     if toolsets is None or toolsets == "all" or (isinstance(toolsets, str) and not toolsets.strip()):
         names: list[str] = list(ALL_TOOLSETS)
     else:
@@ -313,6 +330,8 @@ def build_surface(
         write_tools=write_tools,
         read_only=read_only,
         chats=ChatAccess(allowed=allowed, denied=frozenset(_norm_chat(item) for item in denied_chats)),
+        detail=detail,
+        max_text_chars=max_text_chars,
     )
 
 
@@ -328,6 +347,8 @@ def surface_from_env(
         read_only=cli_read_only or _truthy(env.get("TELEGRAM_READ_ONLY")),
         allowed_chats=_split(allowed_raw) if allowed_raw is not None and allowed_raw.strip() else None,
         denied_chats=_split(env.get("TELEGRAM_DENIED_CHATS")),
+        detail=(env.get("TELEGRAM_RESPONSE_DETAIL") or "full").strip().lower(),
+        max_text_chars=int(env.get("TELEGRAM_MAX_TEXT_CHARS") or 500),
     )
 
 
@@ -394,5 +415,38 @@ def filter_result(value: Any, chats: ChatAccess) -> Any:
                 out[key] = filter_result(out[key], chats)
         if isinstance(out.get("recipient"), Mapping) and not chats.permits_record(out["recipient"]):
             out["recipient"], out["status"] = None, "not_found"
+        return out
+    return value
+
+
+# Fields that carry message text; truncated in summary mode.
+TEXT_FIELDS = frozenset({"message", "text", "about", "caption"})
+# Keys dropped in summary mode (raw/duplicated structures).
+NOISE_FIELDS = frozenset({"raw", "entities", "media_raw"})
+
+
+def compact(value: Any, max_text_chars: int) -> Any:
+    """Summary mode: drop null/empty/noise fields, cut long texts and mark them."""
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        if isinstance(decoded, dict | list):
+            return json.dumps(compact(decoded, max_text_chars), ensure_ascii=False, separators=(",", ":"))
+        return value
+    if isinstance(value, list):
+        return [compact(item, max_text_chars) for item in value]
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            if key in NOISE_FIELDS or item is None or item == "" or item == [] or item == {}:
+                continue
+            if key in TEXT_FIELDS and isinstance(item, str) and len(item) > max_text_chars:
+                out[key] = item[:max_text_chars] + "…"
+                out[f"{key}_truncated"] = True
+                out[f"{key}_length"] = len(item)
+                continue
+            out[key] = compact(item, max_text_chars)
         return out
     return value

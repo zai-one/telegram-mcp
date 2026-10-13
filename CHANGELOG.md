@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compact replies: `TELEGRAM_RESPONSE_DETAIL=summary` (+ `TELEGRAM_MAX_TEXT_CHARS`) drops empty fields and truncates long texts with explicit markers; default `full` is unchanged.
+- New read tools (toolset `chat_insights`): `telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats` (vendor patch over Telethon `get_stats` → `stats.getBroadcastStats` / `stats.getMegagroupStats`). Skill `telegram-channel-report`.
+
 - Toolsets (`TELEGRAM_TOOLSETS`, `TELEGRAM_TOOLS`, `TELEGRAM_DISABLED_TOOLS`, `--toolsets`), read-only mode (`TELEGRAM_READ_ONLY`, `--read-only`) and write categories for `telegram_write`. Unset = previous surface.
 - Per-chat ACL: `TELEGRAM_ALLOWED_CHATS` (deny-by-default when set) and `TELEGRAM_DENIED_CHATS`; listings are filtered. Under an allowlist the generic `telegram_write` fails closed: a call must name an allowed chat (or, without a chat, an allowed `user_id`/`channel`), and account-wide or chat-creating writes (join by link, create group/channel, profile, privacy, folders, contacts import) are denied.
 - Compact tool descriptions and titles; router `instructions`; error envelopes gain `hint` and `docs`; new codes `chat_access_denied`, `tool_disabled`.

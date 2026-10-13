@@ -313,6 +313,49 @@ async def list_topics(
         )
 
 
+@mcp.tool(annotations=ToolAnnotations(title="Get Chat Stats", openWorldHint=True, readOnlyHint=True))
+@with_account(readonly=True)
+async def get_chat_stats(chat_id: Union[int, str], account: str = None) -> str:
+    """
+    zai patch: summary statistics of a channel (stats.getBroadcastStats) or supergroup
+    (stats.getMegagroupStats) via Telethon get_stats. Requires admin rights and
+    channelFull.can_view_stats; graphs are omitted.
+    """
+    try:
+        cl = get_client(account)
+        await ensure_connected(cl)
+        entity = await resolve_entity(chat_id, cl)
+        stats = await cl.get_stats(entity)
+
+        def pair(value):
+            if value is None:
+                return None
+            return {"current": getattr(value, "current", None), "previous": getattr(value, "previous", None)}
+
+        period = getattr(stats, "period", None)
+        record = {
+            "chat_id": getattr(entity, "id", None),
+            "kind": "channel" if hasattr(stats, "followers") else "supergroup",
+            "period": {
+                "min_date": period.min_date.isoformat() if period and period.min_date else None,
+                "max_date": period.max_date.isoformat() if period and period.max_date else None,
+            },
+        }
+        for name in (
+            "followers", "views_per_post", "shares_per_post", "reactions_per_post",
+            "views_per_story", "shares_per_story", "reactions_per_story",
+            "members", "messages", "viewers", "posters",
+        ):
+            if getattr(stats, name, None) is not None:
+                record[name] = pair(getattr(stats, name))
+        notifications = getattr(stats, "enabled_notifications", None)
+        if notifications is not None and getattr(notifications, "total", 0):
+            record["enabled_notifications_share"] = round(notifications.part / notifications.total, 4)
+        return json.dumps(record, default=json_serializer)
+    except Exception as e:
+        return log_and_format_error("get_chat_stats", e, chat_id=chat_id)
+
+
 @mcp.tool(
     annotations=ToolAnnotations(
         title="Enable Forum Topics", openWorldHint=True, destructiveHint=True, idempotentHint=True

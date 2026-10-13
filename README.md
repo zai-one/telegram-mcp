@@ -107,12 +107,13 @@ Nothing changes unless you set these variables (default: every tool, every chat)
 | `TELEGRAM_READ_ONLY=1` | Hide every write tool (also `--read-only`). |
 | `TELEGRAM_ALLOWED_CHATS` | Comma list of chat ids / @usernames. When set, every other chat is denied and hidden from listings, and calls that name no allowed chat (account-wide writes such as joining by link, creating groups, profile or privacy changes) are denied. |
 | `TELEGRAM_DENIED_CHATS` | Always denied. |
+| `TELEGRAM_RESPONSE_DETAIL` | `full` (default, unchanged) or `summary`: drops empty fields and cuts message texts to `TELEGRAM_MAX_TEXT_CHARS` (default 500) with `message_truncated`/`message_length`. |
 
-Toolsets: `core`, `messages_read`, `messages_write`, `events`, `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
+Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (`telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats`), `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
 
 ## Skills, prompts and guides
 
-Self-contained skills in [`skills/`](skills/) (each folder has `SKILL.md` plus its own `references/`, `templates/`, `scripts/`): `telegram-inbox-triage`, `telegram-safe-send`, `telegram-chat-research`, `telegram-group-admin`. Copy a folder into your client's skills directory (`~/.claude/skills/`, `.agents/skills/`, `.cursor/skills/`) or install the plugin. Clients without skills get MCP prompts `inbox_digest`, `publish_post`, `chat_research` and resources `telegram://playbook`, `telegram://guide/{formatting|errors|flood-wait|acl|search-syntax|permissions}`.
+Self-contained skills in [`skills/`](skills/) (each folder has `SKILL.md` plus its own `references/`, `templates/`, `scripts/`): `telegram-inbox-triage`, `telegram-safe-send`, `telegram-chat-research`, `telegram-group-admin`, `telegram-channel-report`. Copy a folder into your client's skills directory (`~/.claude/skills/`, `.agents/skills/`, `.cursor/skills/`) or install the plugin. Clients without skills get MCP prompts `inbox_digest`, `publish_post`, `chat_research` and resources `telegram://playbook`, `telegram://guide/{formatting|errors|flood-wait|acl|search-syntax|permissions}`.
 
 ### Example tasks
 
