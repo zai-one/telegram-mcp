@@ -94,9 +94,7 @@ def test_failed_fetch_is_not_repeated_for_30_minutes(enabled):
     update_check.refresh_in_background()  # same backoff; would start no thread or fetch
     assert len(offline.calls) == 1
     later = FakeGitHub(release())
-    result = update_check.check_for_update(
-        fetch=later, now=1_000_000 + update_check.FAILURE_BACKOFF_SECONDS
-    )
+    result = update_check.check_for_update(fetch=later, now=1_000_000 + update_check.FAILURE_BACKOFF_SECONDS)
     assert len(later.calls) == 1 and result["latest_version"] == "99.0.0"
 
 
@@ -184,9 +182,10 @@ def test_injected_cache_values_are_dropped_on_read(enabled, config):
         encoding="utf-8",
     )
     assert update_check.cached_update_hint() is None
-    assert "Update available" not in create_server(
-        config, transport="stdio", adapter=FixtureAdapter()
-    ).instructions
+    assert (
+        "Update available"
+        not in create_server(config, transport="stdio", adapter=FixtureAdapter()).instructions
+    )
     offline = FakeGitHub(error=TimeoutError())
     result = update_check.check_for_update(fetch=offline, now=1_000_000 + 10)
     assert result["status"] == "unavailable" and not _leaks(result)

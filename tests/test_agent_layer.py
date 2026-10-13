@@ -25,7 +25,8 @@ async def names(config, surface):
 async def test_unset_env_keeps_full_backward_compatible_surface(config, monkeypatch):
     for key in ("TELEGRAM_TOOLSETS", "TELEGRAM_READ_ONLY", "TELEGRAM_ALLOWED_CHATS", "TELEGRAM_TOOLS"):
         monkeypatch.delenv(key, raising=False)
-    assert await names(config, surface_from_env()) == set(ALL_TOOLS)
+    # telegram_list_accounts appears only for multi-account bindings.
+    assert await names(config, surface_from_env()) == set(ALL_TOOLS) - {"telegram_list_accounts"}
 
 
 async def test_read_only_and_default_presets(config):

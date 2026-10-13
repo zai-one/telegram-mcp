@@ -15,7 +15,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUDGET_BYTES = {"default": 11_000, "all": 12_000}
+# +wait_for_new_message (events) costs ~600 B; budget grows only with a default tool.
+BUDGET_BYTES = {"default": 11_700, "all": 12_600}
 NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 

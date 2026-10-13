@@ -62,7 +62,7 @@ class StateStore:
     async def provider_binding(self, actor, provider):
         if provider != "telegram":
             raise PermissionError("unknown provider")
-        return self.config.bindings.get(str(actor))
+        return self.config.resolve_account(str(actor))
 
     @staticmethod
     def _record(row):
@@ -86,7 +86,7 @@ class StateStore:
         chat_id=None,
     ):
         actor = str(actor)
-        if self.config.bindings.get(actor) != account_label:
+        if self.config.resolve_account(str(actor)) != account_label:
             raise PermissionError("account binding mismatch")
         if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 128:
             raise ValueError("bounded idempotency key required")
@@ -173,7 +173,7 @@ class StateStore:
     async def consume_provider_request(self, actor, provider, limit):
         if provider != "telegram:high":
             raise ValueError("unknown quota")
-        label = self.config.bindings.get(str(actor))
+        label = self.config.resolve_account(str(actor))
         if not label:
             raise PermissionError("no account binding")
         with self.connect() as db:
@@ -200,7 +200,7 @@ class StateStore:
             )
 
     def admit(self, execution_id, actor, *, write):
-        label = self.config.bindings.get(actor)
+        label = self.config.resolve_account(str(actor))
         if not label:
             raise PermissionError("no account binding")
         with self.connect() as db:
@@ -240,7 +240,7 @@ class StateStore:
             )
 
     def cooldown(self, actor, seconds):
-        label = self.config.bindings.get(actor)
+        label = self.config.resolve_account(str(actor))
         with self.connect() as db:
             db.execute(
                 "INSERT INTO telegram_cooldowns VALUES(?,?,?) ON CONFLICT(account,account_label) "
