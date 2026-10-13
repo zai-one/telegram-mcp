@@ -15,12 +15,12 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# +wait_for_new_message (events) costs ~600 B; budget grows only with a default tool.
-BUDGET_BYTES = {"default": 11_700, "all": 12_600}
+# +wait_for_new_message / wait_for_settled_message (events) ~600 B each; grow only with default tools.
+BUDGET_BYTES = {"default": 12_400, "all": 13_200}
 # Always-loaded agent context = instructions + tools/list + every skill frontmatter.
 # Estimated tokens = bytes / 4 (conservative for JSON/English; Russian costs more,
 # but frontmatters are mostly English). Budget per preset.
-CONTEXT_TOKEN_BUDGET = {"default": 4_000, "all": 4_200}
+CONTEXT_TOKEN_BUDGET = {"default": 4_200, "all": 4_400}
 NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 

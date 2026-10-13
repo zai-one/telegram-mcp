@@ -53,8 +53,13 @@ TOOLSETS: dict[str, dict[str, Any]] = {
         "tools": ("telegram_list_topics", "telegram_get_admins", "telegram_get_chat_stats"),
     },
     "events": {
-        "description": "Cursor polling and bounded wait for new messages, no read receipts.",
-        "tools": ("telegram_poll_messages", "telegram_acknowledge_poll", "telegram_wait_for_new_message"),
+        "description": "Cursor polling and bounded waits (new / settled debounce), no read receipts.",
+        "tools": (
+            "telegram_poll_messages",
+            "telegram_acknowledge_poll",
+            "telegram_wait_for_new_message",
+            "telegram_wait_for_settled_message",
+        ),
     },
     "advanced_read": {
         "description": "Opt-in: generic telegram_read over ~40 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",

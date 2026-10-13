@@ -66,6 +66,10 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Wait (<=55s) for a new message in 1-10 numeric chat_ids, e.g. a reply. One-shot check: "
         "`telegram_poll_messages`. Ack batch_id after."
     ),
+    "telegram_wait_for_settled_message": (
+        "Debounced wait: after new msgs in 1-10 chats, return when quiet settle_seconds (1-30, default 6) "
+        "or max_wait (status=settled|partial|timeout). Prefer over wait_for_new for multi-msg bursts."
+    ),
     "telegram_list_accounts": "Account labels you may pass as `account` on any tool; first is the default. Local.",
     "telegram_acknowledge_poll": "Acknowledge a processed poll batch_id so the next poll starts after it. Local only.",
     "telegram_list_topics": (
@@ -103,6 +107,7 @@ TOOL_TITLES: dict[str, str] = {
     "telegram_poll_messages": "Poll chats",
     "telegram_acknowledge_poll": "Acknowledge poll",
     "telegram_wait_for_new_message": "Wait for new message",
+    "telegram_wait_for_settled_message": "Wait for settled message",
     "telegram_list_accounts": "List accounts",
     "telegram_check_update": "Check for update",
     "telegram_read": "Generic read",
@@ -153,8 +158,8 @@ ROUTES: tuple[tuple[str, str, str], ...] = (
         "skill telegram-safe-send, guide formatting",
     ),
     (
-        "Wait for reply/watch chats",
-        "telegram_wait_for_new_message",
+        "Wait for reply/settled burst",
+        "telegram_wait_for_new_message|telegram_wait_for_settled_message",
         "skill telegram-watch-replies",
     ),
     ("Other account", "telegram_list_accounts, then account=", "guide accounts"),

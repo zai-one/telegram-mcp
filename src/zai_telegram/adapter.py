@@ -42,7 +42,8 @@ TELEGRAM_TOOL_MAP = {
 # Reviewed read-only upstream tools reachable through the generic
 # ``telegram_read`` (opt-in toolset ``advanced_read``). Excluded on review:
 # invite-link tools (may create links), GIF search (inline-bot query), event
-# waits (global handlers; use telegram_wait_for_new_message) and list_accounts.
+# waits (global handlers; use telegram_wait_for_new_message /
+# telegram_wait_for_settled_message) and list_accounts.
 TELEGRAM_READ_ALLOWLIST = frozenset(
     {
         "get_chats",
