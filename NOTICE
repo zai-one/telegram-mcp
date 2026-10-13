@@ -7,3 +7,5 @@ Per-file upstream/patched/package hashes: src/zai_telegram/_vendor/manifest.json
 Platform-derived sources and original wrapper provenance: SOURCE_PROVENANCE.json.
 ZAI-owned wrapper portions use LicenseRef-ZAI-ONE. The Apache-2.0
 license and rights for the identified third-party code remain unchanged.
+
+License history: this project has not been released under MIT. Releases before 2026-10-13 were published under LicenseRef-ZAI-ONE 1.0 and keep those terms; changes from 2026-10-13 onward use LicenseRef-ZAI-ONE 2.0 (see LICENSE).

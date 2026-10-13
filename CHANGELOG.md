@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- License: LicenseRef-ZAI-ONE 2.0 (source-available). Free install and use for yourself and your organisation, including commercial work; issues and pull requests welcome; copying code into other projects, redistribution, embedding and competing hosted services need written permission. Earlier releases keep their LicenseRef-ZAI-ONE 1.0 terms (see NOTICE). README first screen: one-line scope, why this MCP, maintenance and update check.
+
 - Compact replies: `TELEGRAM_RESPONSE_DETAIL=summary` (+ `TELEGRAM_MAX_TEXT_CHARS`) drops empty fields and truncates long texts with explicit markers; default `full` is unchanged.
 - New read tools (toolset `chat_insights`): `telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats` (vendor patch over Telethon `get_stats` → `stats.getBroadcastStats` / `stats.getMegagroupStats`). Skill `telegram-channel-report`.
 

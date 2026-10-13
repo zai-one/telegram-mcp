@@ -6,6 +6,8 @@
 
 **Catch up on a conversation and prepare your reply in the same chat.**
 
+> MCP server for your own Telegram account (MTProto): read, search and summarise chats, channels and groups; send only when allowed, with per-chat ACL and idempotent sends.
+
 Find an earlier agreement, collect context from a busy conversation or review incoming messages before replying. Telegram MCP connects your assistant to a Telegram user account. It starts with read-only access; sending can be enabled with separate permissions.
 
 [Quick start](#quick-start) · [Connect your assistant](#connect-your-assistant) · [Issues](https://github.com/zai-one/telegram-mcp/issues)
@@ -23,6 +25,20 @@ Try asking your assistant:
 | Send and follow up | Send or reply when permitted, submit message batches and inspect outbox status. |
 | Work with attachments | [Files, albums and voice notes](docs/MEDIA_AND_POLLING.md) from operator-approved folders, plus bounded downloads to a separate folder. |
 | Keep up with selected chats | Poll new message IDs and acknowledge processed batches. Cursors survive a restart; unacknowledged messages can be read again. |
+
+## Why this MCP
+
+- Built on the [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp) v3.2.0 tool set (Apache-2.0, vendored with provenance) and adds safety on top.
+- Starts read-only; toolsets, per-chat allow/deny ACL, explicit-confirmation sends with idempotency keys and an outbox.
+- Message text is treated as untrusted; reading never marks messages as read; structured errors with `retry_after_seconds` for flood waits.
+- Compact replies, conversation context and chat insights (topics, admins, channel stats); polling cursors survive restarts.
+
+## Maintained and up to date
+
+- Actively maintained by ZAI.ONE: current version 0.4.0; release notes in [CHANGELOG.md](CHANGELOG.md) and [Releases](https://github.com/zai-one/telegram-mcp/releases).
+- Built-in update check: ask the assistant to run `telegram_check_update` (public GitHub API, no credentials, cached; nothing is installed automatically; `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1` turns it off).
+- Follows current MCP practice: tool annotations (read-only / destructive hints), toolsets and read-only mode, server `instructions`, prompts and resources, structured errors with recovery hints, secrets kept out of tool output, a token budget for tool descriptions enforced in tests.
+- CI runs the test suite on Linux and Windows for every pull request.
 
 ## Quick start
 
@@ -151,9 +167,9 @@ Tests use synthetic fixtures. A passing test run does not establish live provide
 
 [ZAI.ONE](https://zai.one) is a digital agency working on websites, SEO, advertising and analytics. We also build tools that connect AI assistants to everyday work. [Talk to us on Telegram](https://t.me/zai_one) about setup, automation or an integration for your team.
 
-## Use and feedback
+## License, use and contributing
 
-You may install and use this project for your own accounts under [LicenseRef-ZAI-ONE](LICENSE).
-This is not an open-source license. Third-party notices remain in [NOTICE](NOTICE).
-If it helps, give the repository a ⭐. Missing something or found a bug? [Open an issue](https://github.com/zai-one/telegram-mcp/issues/new/choose).
-I'm working on this project; accepted improvements are implemented here. Support is not guaranteed.
+- **Use:** you may install and use this MCP server freely for yourself and your organisation, including commercial work. If it helps, please consider giving the repository a ⭐ — appreciated, never required.
+- **Contribute:** [issues](https://github.com/zai-one/telegram-mcp/issues/new/choose) and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Never post tokens, cookies, sessions or account data.
+- **Not allowed without written permission from ZAI.ONE:** copying code into other projects, forking for redistribution, embedding the server in other products or offering it as a competing service.
+- License: [LicenseRef-ZAI-ONE 2.0](LICENSE) (source-available, not open source). Third-party notices and license history: [NOTICE](NOTICE).
