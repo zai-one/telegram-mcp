@@ -157,6 +157,26 @@ def configure(directory: Path) -> Path:
     return target
 
 
+def setup_paths(directory: Path) -> tuple[Path, Path | None]:
+    """Secret and bindings files named by an existing mcp.local.json (relative to it)."""
+    config = directory.expanduser().resolve() / "mcp.local.json"
+    if not config.is_file():
+        raise ValueError("mcp.local.json does not exist in the selected directory")
+    env = json.loads(config.read_text(encoding="utf-8")).get("env", {})
+
+    def resolve(key: str) -> Path | None:
+        value = env.get(key)
+        if not value:
+            return None
+        path = Path(value).expanduser()
+        return path if path.is_absolute() else (config.parent / path).resolve()
+
+    secret = resolve("TELEGRAM_SECRET_FILE")
+    if secret is None:
+        raise ValueError("TELEGRAM_SECRET_FILE is not set in mcp.local.json")
+    return secret, resolve("TELEGRAM_BINDINGS_FILE")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Create local configuration for Telegram MCP.")
     parser.add_argument("--directory", type=Path, default=Path.cwd(), help="Directory for new setup files")
@@ -166,7 +186,40 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--format", choices=("json", "toml"), default="json", help="Snippet format with --client-only"
     )
+    parser.add_argument(
+        "--add-account",
+        metavar="LABEL",
+        help="Log in one more account into the setup in --directory (phone code or --qr; 2FA asked here)",
+    )
+    parser.add_argument("--qr", action="store_true", help="With --add-account: log in by scanning a QR code")
+    parser.add_argument(
+        "--principal", default="local-operator", help="With --add-account: principal granted the new label"
+    )
     args = parser.parse_args(argv)
+    if args.add_account:
+        if not sys.stdin.isatty():
+            parser.error("Adding an account needs a terminal. Never pipe codes or passwords.")
+        try:
+            secret, bindings = setup_paths(args.directory)
+            import asyncio
+
+            from .login_telegram import add_account
+
+            asyncio.run(
+                add_account(
+                    secret, args.add_account, bindings_path=bindings, actor=args.principal, use_qr=args.qr
+                )
+            )
+        except (Exception, KeyboardInterrupt):
+            raise SystemExit(
+                "Account was not added. Check the label (new, a-z0-9_), the setup directory and the login "
+                "locally; existing sessions were not changed."
+            ) from None
+        print(
+            f"Added account '{args.add_account}'. Restart the MCP server, "
+            f"then pass account={args.add_account}."
+        )
+        return
     if args.client_only:
         config = args.directory.expanduser().resolve() / "mcp.local.json"
         if not config.is_file():
