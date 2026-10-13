@@ -350,47 +350,17 @@ async def get_gif_search(query: str, limit: int = 10, account: str = None) -> st
     try:
         cl = get_client(account)
         await ensure_connected(cl)
-        # Try approach 1: SearchGifsRequest
-        try:
-            result = await cl(
-                functions.messages.SearchGifsRequest(q=query, offset_id=0, limit=limit)
-            )
-            if not result.gifs:
-                return "[]"
-            return json.dumps(
-                [g.document.id for g in result.gifs], indent=2, default=json_serializer
-            )
-        except (AttributeError, ImportError):
-            # Fallback approach: Use SearchRequest with GIF filter
-            try:
-                from telethon.tl.types import InputMessagesFilterGif
-
-                result = await cl(
-                    functions.messages.SearchRequest(
-                        peer="gif",
-                        q=query,
-                        filter=InputMessagesFilterGif(),
-                        min_date=None,
-                        max_date=None,
-                        offset_id=0,
-                        add_offset=0,
-                        limit=limit,
-                        max_id=0,
-                        min_id=0,
-                        hash=0,
-                    )
-                )
-                if not result or not hasattr(result, "messages") or not result.messages:
-                    return "[]"
-                # Extract document IDs from any messages with media
-                gif_ids = []
-                for msg in result.messages:
-                    if hasattr(msg, "media") and msg.media and hasattr(msg.media, "document"):
-                        gif_ids.append(msg.media.document.id)
-                return json.dumps(gif_ids, default=json_serializer)
-            except Exception as inner_e:
-                # Last resort: Try to fetch from a public bot
-                return f"Could not search GIFs using available methods: {inner_e}"
+        # zai patch: Telethon has no messages.SearchGifsRequest; GIF search in
+        # Telegram is an inline query to the official @gif bot.
+        results = await cl.inline_query("gif", query)
+        gif_ids = []
+        for item in results:
+            document = getattr(item, "document", None)
+            if document is not None:
+                gif_ids.append(document.id)
+            if len(gif_ids) >= limit:
+                break
+        return json.dumps(gif_ids, default=json_serializer)
     except Exception as e:
         logger.exception(f"get_gif_search failed (query={query}, limit={limit})")
         return log_and_format_error("get_gif_search", e, query=query, limit=limit)

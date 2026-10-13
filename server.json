@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.zai-one/telegram-mcp",
+  "title": "Telegram MCP",
+  "description": "Your Telegram account for AI assistants: inbox, search, safe sending, polling; toolsets, read-only mode and per-chat ACL.",
+  "repository": {"url": "https://github.com/zai-one/telegram-mcp", "source": "github"},
+  "version": "0.4.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "zai-telegram-mcp",
+      "version": "0.4.0",
+      "transport": {"type": "stdio"},
+      "environmentVariables": [
+        {"name": "TELEGRAM_SECRET_FILE", "description": "Private env file with TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING", "isRequired": true, "isSecret": false, "format": "filepath"},
+        {"name": "TELEGRAM_BINDINGS_FILE", "description": "Principal-to-account bindings JSON", "isRequired": true, "format": "filepath"},
+        {"name": "TELEGRAM_STATE_PATH", "description": "SQLite state path", "isRequired": false, "format": "filepath"},
+        {"name": "TELEGRAM_LOCAL_SCOPES", "description": "telegram:read or 'telegram:read telegram:write'", "isRequired": false},
+        {"name": "TELEGRAM_WRITE_ENABLED", "description": "true enables writes (default false)", "isRequired": false},
+        {"name": "TELEGRAM_TOOLSETS", "description": "all (default), default, or comma list", "isRequired": false},
+        {"name": "TELEGRAM_READ_ONLY", "description": "1 hides every write tool", "isRequired": false},
+        {"name": "TELEGRAM_ALLOWED_CHATS", "description": "Comma list of chat ids/@usernames; set = deny all others", "isRequired": false},
+        {"name": "TELEGRAM_DENIED_CHATS", "description": "Comma list of chat ids/@usernames always denied", "isRequired": false}
+      ]
+    }
+  ]
+}

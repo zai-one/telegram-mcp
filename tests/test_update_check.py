@@ -165,7 +165,7 @@ def test_injected_release_tag_never_reaches_result_or_instructions(enabled, conf
     assert update_check.cached_update_hint() is None
     assert not _leaks(update_check.cache_path().read_text(encoding="utf-8"))
     server = create_server(config, transport="stdio", adapter=FixtureAdapter())
-    assert server.instructions is None
+    assert "Update available" not in server.instructions and not _leaks(server.instructions)
 
 
 def test_injected_cache_values_are_dropped_on_read(enabled, config):
@@ -184,7 +184,9 @@ def test_injected_cache_values_are_dropped_on_read(enabled, config):
         encoding="utf-8",
     )
     assert update_check.cached_update_hint() is None
-    assert create_server(config, transport="stdio", adapter=FixtureAdapter()).instructions is None
+    assert "Update available" not in create_server(
+        config, transport="stdio", adapter=FixtureAdapter()
+    ).instructions
     offline = FakeGitHub(error=TimeoutError())
     result = update_check.check_for_update(fetch=offline, now=1_000_000 + 10)
     assert result["status"] == "unavailable" and not _leaks(result)
@@ -267,7 +269,8 @@ def test_startup_hint_uses_cache_only(enabled, config):
     update_check.check_for_update(fetch=FakeGitHub(release()))
     hint = update_check.cached_update_hint()
     assert hint and "99.0.0" in hint and "telegram_check_update" in hint
-    assert create_server(config, transport="stdio", adapter=FixtureAdapter()).instructions == hint
+    instructions = create_server(config, transport="stdio", adapter=FixtureAdapter()).instructions
+    assert instructions.startswith("Telegram MCP:") and instructions.endswith("\n" + hint)
 
 
 async def test_check_update_tool_is_read_only(enabled, config, monkeypatch):

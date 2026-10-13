@@ -2,6 +2,8 @@
 
 # Telegram MCP
 
+<!-- mcp-name: io.github.zai-one/telegram-mcp -->
+
 **Catch up on a conversation and prepare your reply in the same chat.**
 
 Find an earlier agreement, collect context from a busy conversation or review incoming messages before replying. Telegram MCP connects your assistant to a Telegram user account. It starts with read-only access; sending can be enabled with separate permissions.
@@ -72,6 +74,54 @@ The client starts the MCP server for you. Refresh its tool list, then make your 
 A valid user session returns a list of chats. Choose one to retrieve messages or conversation context. Drafting and summarising happen in your AI assistant; the MCP server supplies Telegram data and supported actions.
 
 If tools do not appear, check the absolute path, whether the client can find `uv`, and the `--check-config` result. For access errors, check account credentials and permissions. [Installation and troubleshooting](INSTALL.md).
+
+### Other clients
+
+```bash
+# Claude Code (MCP only)
+claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.4.0 zai-telegram-mcp --config /ABSOLUTE/PATH/mcp.local.json
+# Claude Code plugin (MCP + skills) from this repository; set TELEGRAM_MCP_CONFIG to your mcp.local.json
+/plugin marketplace add zai-one/telegram-mcp
+/plugin install telegram@zai-telegram
+```
+
+Codex `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.telegram]
+command = "uvx"
+args = ["--from", "git+https://github.com/zai-one/telegram-mcp@v0.4.0", "zai-telegram-mcp", "--config", "/ABSOLUTE/PATH/mcp.local.json"]
+env = { TELEGRAM_TOOLSETS = "default" }
+```
+
+Cursor `.cursor/mcp.json` and Claude Desktop `claude_desktop_config.json` use the `mcpServers` block above (or `"command": "uvx"` with the same args as Codex).
+
+## Toolsets, read-only mode and chat access
+
+Nothing changes unless you set these variables (default: every tool, every chat).
+
+| Variable | Effect |
+|---|---|
+| `TELEGRAM_TOOLSETS` | `all` (default), `default` (= core, messages_read, messages_write, events) or a comma list. Also `--toolsets`. |
+| `TELEGRAM_TOOLS` / `TELEGRAM_DISABLED_TOOLS` | Add or hide individual tools. |
+| `TELEGRAM_READ_ONLY=1` | Hide every write tool (also `--read-only`). |
+| `TELEGRAM_ALLOWED_CHATS` | Comma list of chat ids / @usernames. When set, every other chat is denied and hidden from listings. |
+| `TELEGRAM_DENIED_CHATS` | Always denied. |
+
+Toolsets: `core`, `messages_read`, `messages_write`, `events`, `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
+
+## Skills, prompts and guides
+
+Self-contained skills in [`skills/`](skills/) (each folder has `SKILL.md` plus its own `references/`, `templates/`, `scripts/`): `telegram-inbox-triage`, `telegram-safe-send`, `telegram-chat-research`, `telegram-group-admin`. Copy a folder into your client's skills directory (`~/.claude/skills/`, `.agents/skills/`, `.cursor/skills/`) or install the plugin. Clients without skills get MCP prompts `inbox_digest`, `publish_post`, `chat_research` and resources `telegram://playbook`, `telegram://guide/{formatting|errors|flood-wait|acl|search-syntax|permissions}`.
+
+### Example tasks
+
+- "Triage my unread Telegram chats; nothing should be marked read."
+- "Find what the team said about the invoice last week."
+- "Draft a post for @my_channel about the release, show it to me, then publish."
+- "Reply to Ivan's last message: we'll ship on Friday."
+- "Watch chat -100123 and tell me when someone asks a question."
+- "Ban user 123 from our group after I confirm."
 
 ## Access and limits
 

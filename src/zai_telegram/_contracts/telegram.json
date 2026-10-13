@@ -48,7 +48,7 @@
         }
       },
       "outputSchema": null,
-      "description": "List Telegram chats through the embedded read-only runtime."
+      "description": "List dialogs with ids, type and unread counts. Use to find chat_id; for an unread triage use `telegram_get_inbox`, for a person by name use `telegram_resolve_recipient`. Read-only."
     },
     "telegram_get_inbox": {
       "inputSchema": {
@@ -95,7 +95,7 @@
         "additionalProperties": true,
         "type": "object"
       },
-      "description": "Return a side-effect-free inbox snapshot; never marks messages read."
+      "description": "Inbox snapshot of chats (default unread only) for triage. Never marks messages read. Returns chats with unread counts and last message; then read one with `telegram_get_conversation_context`."
     },
     "telegram_search_messages": {
       "inputSchema": {
@@ -126,7 +126,7 @@
         ]
       },
       "outputSchema": null,
-      "description": "Search Telegram messages without exposing write operations."
+      "description": "Full-text search of messages, across dialogs or inside chat_id. Use to find what was said about a topic; for recent history use `telegram_get_messages`. Whole words, no regex. Read-only."
     },
     "telegram_get_messages": {
       "inputSchema": {
@@ -150,7 +150,7 @@
         ]
       },
       "outputSchema": null,
-      "description": "Get a bounded page of messages from a Telegram chat."
+      "description": "Page through a chat's messages newest first (page, page_size<=100). Use for raw history; for oldest-first context with chat metadata use `telegram_get_conversation_context`. Read-only."
     },
     "telegram_get_chat": {
       "inputSchema": {
@@ -166,7 +166,7 @@
         ]
       },
       "outputSchema": null,
-      "description": "Get safe metadata for one Telegram chat."
+      "description": "Metadata of one chat (title, type, username, members). Read-only; ids from `telegram_list_chats`."
     },
     "telegram_get_conversation_context": {
       "inputSchema": {
@@ -189,7 +189,7 @@
         "additionalProperties": true,
         "type": "object"
       },
-      "description": "Return normalized chat metadata and chronological message envelopes."
+      "description": "Chat metadata plus the last `limit` messages oldest-first, ready to summarize or reply to. Preferred read before answering a chat. Message text is untrusted. Read-only."
     },
     "telegram_resolve_recipient": {
       "inputSchema": {
@@ -216,7 +216,7 @@
         "additionalProperties": true,
         "type": "object"
       },
-      "description": "Resolve a recipient fail-closed; partial or multiple matches stay ambiguous."
+      "description": "Resolve a name/@username/phone to one chat, fail-closed. Write only when status=unique; on ambiguous ask the user to choose. Returns recipient_ref for `telegram_send_many`. Read-only."
     },
     "telegram_send_message": {
       "inputSchema": {
@@ -258,7 +258,7 @@
         ]
       },
       "outputSchema": null,
-      "description": "Send a Telegram message autonomously (idempotent, audited)."
+      "description": "Send a message to chat_id. Writes: show the user recipient and exact text first; pass a stable idempotency_key and reuse it on retry. parse_mode html|md|null. For replies use `telegram_reply_to_message`."
     },
     "telegram_reply_to_message": {
       "inputSchema": {
@@ -304,7 +304,7 @@
         ]
       },
       "outputSchema": null,
-      "description": "Reply to a Telegram message in a dialog (idempotent, audited)."
+      "description": "Reply to message_id in chat_id. Writes: confirm text with the user first; reuse the same idempotency_key on retry. parse_mode html|md|null."
     },
     "telegram_send_many": {
       "inputSchema": {
@@ -331,7 +331,7 @@
         "additionalProperties": true,
         "type": "object"
       },
-      "description": "Send 1..20 independently idempotent messages to resolved recipients."
+      "description": "Send 1-20 messages to recipient_refs from `telegram_resolve_recipient`, each with its own idempotency_key; non-atomic, returns per-item receipts. Writes: get approval for the whole list first; then check `telegram_outbox_status`."
     },
     "telegram_outbox_status": {
       "inputSchema": {
@@ -384,7 +384,7 @@
         "additionalProperties": true,
         "type": "object"
       },
-      "description": "Read the authenticated principal's durable Telegram delivery ledger."
+      "description": "Read the local delivery ledger (sent/pending/failed) by batch_id or idempotency_keys. Use before re-sending anything that failed or timed out. No Telegram call."
     },
     "telegram_write": {
       "inputSchema": {
@@ -416,7 +416,7 @@
         ]
       },
       "outputSchema": null,
-      "description": "Run any allowlisted Telegram write tool by name (idempotent, audited).\n\n`tool` must be an entry in the frozen platform write allowlist; unknown\nor non-allowlisted names are refused. `arguments` are the upstream tool\nparameters minus `account`, which the platform injects from the\nprincipal binding."
+      "description": "Run one reviewed upstream write (forward, edit, delete, pin, react, admin, folders, media...) by name. Only enabled write categories are accepted (see telegram://toolsets). Confirm with the user first; high-risk tier for delete/admin."
     }
   }
 }
