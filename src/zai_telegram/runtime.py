@@ -34,6 +34,7 @@ WRITE_TOOLS = frozenset(
         "telegram_send_many",
         "telegram_outbox_status",
         "telegram_write",
+        "telegram_add_account",
     }
 )
 
