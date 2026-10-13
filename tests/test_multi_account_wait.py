@@ -47,6 +47,8 @@ async def test_multi_account_adds_optional_account_and_routes_calls(config):
         )
         with pytest.raises(ToolError):
             await client.call_tool("telegram_get_chat", {"chat_id": "101", "account": "stranger"})
+        outbox = (await client.call_tool("telegram_outbox_status", {})).data["records"]
+        assert [(row["idempotency_key"], row["account_label"]) for row in outbox] == [("k1", "second")]
     accounts = [args["account"] for _, args in adapter.calls]
     assert accounts == ["default", "second", "second"]
 

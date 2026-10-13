@@ -129,7 +129,7 @@ Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (
 
 ### Several accounts and waiting for replies
 
-- **Multi-account:** add `TELEGRAM_SESSION_STRING_<LABEL>` (e.g. `_WORK`) to the secret file and bind a list in the bindings file: `{"local-operator": ["default", "work"]}`. The first label is the default; every tool then accepts an optional `account` argument and `telegram_list_accounts` shows the labels. Rate limits, cursors and the outbox are per account. A plain string binding keeps the old single-account schema (no extra tokens).
+- **Multi-account:** add `TELEGRAM_SESSION_STRING_<LABEL>` (e.g. `_WORK`) to the secret file and bind a list in the bindings file: `{"local-operator": ["default", "work"]}`. The first label is the default; every tool then accepts an optional `account` argument and `telegram_list_accounts` shows the labels. Rate limits, cursors and the outbox are per account (outbox records show `account_label`); acknowledge a poll or wait batch with the same `account` that produced it. A plain string binding keeps the old single-account schema (no extra tokens).
 - **Wait for a message:** `telegram_wait_for_new_message(chat_ids, timeout_seconds<=55)` blocks until a new message arrives or returns `status=timeout`. It respects the chat allowlist, never sends read receipts and paces reads (≤ ~24/min).
 
 ## Skills, prompts and guides

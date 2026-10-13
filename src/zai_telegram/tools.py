@@ -685,6 +685,7 @@ def register_tools(server: Any, runtime: Any) -> None:
                     "item_id": row.get("item_id"),
                     "recipient_ref": row.get("recipient_ref"),
                     "chat_id": row.get("chat_id"),
+                    "account_label": row.get("account_label"),
                     "idempotency_key": row.get("idempotency_key"),
                     "tool": row.get("tool"),
                     "status": row.get("status"),
