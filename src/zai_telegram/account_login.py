@@ -5,13 +5,14 @@ Safety model:
   The user scans a QR code with an already signed-in Telegram app and approves
   the new session there (Settings > Devices > Link Desktop Device).
 * Accounts protected by a 2FA password stop at ``password_required``; finishing
-  is done locally with ``zai-telegram-mcp-setup`` so the password stays in a terminal.
+  is done locally with ``zai-telegram-mcp-setup --add-account <label>`` so the password stays in a terminal.
 * The session string is written straight into the private secret file (0600,
   atomic replace) under ``TELEGRAM_SESSION_STRING_<LABEL>``; it is never returned.
   An existing label is never overwritten. The bound principal is granted the new
   label in the bindings file when ``TELEGRAM_BINDINGS_FILE`` is set.
-* The running process keeps its credential fingerprint: a restart activates the
-  account (reported as ``restart_required``).
+* Hot activation: on a multi-account server the new client joins the loaded
+  runtime and the label is granted in the live config (no restart). A
+  single-account server needs a restart to expose the ``account`` argument.
 """
 
 from __future__ import annotations
@@ -84,6 +85,36 @@ def grant_label(bindings_path: Path | None, actor: str, label: str) -> bool:
     data[actor] = [*labels, label]
     _atomic_write(bindings_path, json.dumps(data, indent=2) + "\n")
     return True
+
+
+async def _activate(runtime: Any, actor: str, label: str, granted: bool) -> dict[str, Any]:
+    """Hot-activate the saved session when possible; otherwise ask for a restart."""
+    active = False
+    activate = getattr(runtime.adapter, "activate_account", None)
+    if label != "default" and activate is not None:
+        try:
+            await activate(label)
+            active = True
+        except Exception:  # noqa: BLE001 - never leak provider detail; fall back to restart
+            active = False
+    selectable = active and granted and runtime.grant_account(actor, label)
+    if selectable:
+        return {
+            "status": "added",
+            "label": label,
+            "granted": True,
+            "active": True,
+            "restart_required": False,
+            "next": f"Use account={label} now (see telegram_list_accounts).",
+        }
+    return {
+        "status": "added",
+        "label": label,
+        "granted": granted,
+        "active": active,
+        "restart_required": True,
+        "next": f"Restart the MCP server, then use account={label} (see telegram_list_accounts).",
+    }
 
 
 class LoginSessions:
@@ -167,7 +198,10 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
                 "label": label,
                 "next": (
                     "This account has a 2FA password. Never type it in chat: finish locally with "
-                    "the local wizard `zai-telegram-mcp-setup` in a terminal, then restart the MCP server."
+                    "`zai-telegram-mcp-setup --add-account "
+                    + label
+                    + " --directory <setup dir> --qr` in a terminal "
+                    "(the password is typed there, hidden), then restart the MCP server."
                 ),
             }
         except TimeoutError:
@@ -182,10 +216,4 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
         await asyncio.to_thread(store_session, config.secret_path, label, session)
         raw = os.environ.get("TELEGRAM_BINDINGS_FILE")
         granted = await asyncio.to_thread(grant_label, Path(raw) if raw else None, actor, label)
-        return {
-            "status": "added",
-            "label": label,
-            "granted": granted,
-            "restart_required": True,
-            "next": "Restart the MCP server, then use account=" + label + " (see telegram_list_accounts).",
-        }
+        return await _activate(runtime, actor, label, granted)

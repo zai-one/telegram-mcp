@@ -118,3 +118,80 @@ async def test_read_only_scope_hides_login(config, monkeypatch):
     server, _ = make_server(replace(config, local_scopes=frozenset({"telegram:read"})), monkeypatch)
     async with Client(server) as client:
         assert ADD not in {t.name for t in await client.list_tools()}
+
+
+async def test_hot_activation_on_multi_account_server(config, monkeypatch, tmp_path):
+    bindings = tmp_path / "bindings.json"
+    bindings.write_text(json.dumps({"local-operator": ["default", "second"]}))
+    bindings.chmod(0o600)
+    monkeypatch.setenv("TELEGRAM_BINDINGS_FILE", str(bindings))
+    activated = []
+
+    async def activate(label):
+        activated.append(label)
+        return True
+
+    settings = replace(config, bindings={"local-operator": ["default", "second"]})
+    server, _ = make_server(settings, monkeypatch)
+    import zai_telegram.server as srv
+
+    adapter = FixtureAdapter()
+    adapter.activate_account = activate
+    surface = build_surface("default,account_admin")
+    server = create_server(settings, transport="stdio", adapter=adapter, surface=surface)
+    async with Client(server) as client:
+        await client.call_tool(ADD, {"label": "work"})
+        done = (await client.call_tool(ADD, {"label": "work", "action": "status"})).data
+        assert done["restart_required"] is False and done["active"] and activated == ["work"]
+        listed = (await client.call_tool("telegram_list_accounts", {})).data
+        assert listed["accounts"] == ["default", "second", "work"]
+    assert srv  # module patched by make_server
+
+
+async def test_single_account_server_saves_but_needs_restart(config, monkeypatch):
+    async def activate(label):
+        return True
+
+    server, _ = make_server(config, monkeypatch)
+    async with Client(server) as client:
+        await client.call_tool(ADD, {"label": "work"})
+        done = (await client.call_tool(ADD, {"label": "work", "action": "status"})).data
+    assert done["restart_required"] is True
+
+
+async def test_adapter_hot_activation_requires_pure_addition(config, monkeypatch):
+    import zai_telegram.adapter as module
+    from zai_telegram.adapter import TelegramAdapter
+    from zai_telegram.transport import ProviderError
+
+    adapter = TelegramAdapter(config.secret_path, write_enabled=True)
+    base = {k: v for k, v in adapter._secret().items() if adapter._allowed_secret_key(k)}
+
+    class NewClient:
+        async def connect(self):
+            pass
+
+        async def is_user_authorized(self):
+            return True
+
+        async def disconnect(self):
+            pass
+
+    runtime = SimpleNamespace(clients={"default": object()}, _build_client=lambda s, label: NewClient())
+    adapter._runtime = runtime
+    monkeypatch.setattr(module, "_PROCESS_FINGERPRINT", adapter._fingerprint(base))
+    monkeypatch.setattr(module.os, "environ", {})
+    import telethon.sessions
+
+    monkeypatch.setattr(telethon.sessions, "StringSession", lambda value: value)
+    account_login.store_session(config.secret_path, "work", "synthetic-new-session")
+    assert await adapter.activate_account("work") is True and "work" in runtime.clients
+    # The next load check sees the new file and the updated fingerprint: no restart error.
+    full = {k: v for k, v in adapter._secret().items() if adapter._allowed_secret_key(k)}
+    assert adapter._fingerprint(full) == module._PROCESS_FINGERPRINT
+    # Any other change still requires a restart.
+    text = config.secret_path.read_text().replace("synthetic-api-hash", "changed-hash")
+    config.secret_path.write_text(text)
+    account_login.store_session(config.secret_path, "more", "synthetic-more")
+    with pytest.raises(ProviderError):
+        await adapter.activate_account("more")

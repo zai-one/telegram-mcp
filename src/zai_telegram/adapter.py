@@ -357,10 +357,8 @@ class TelegramAdapter:
             # When write is enabled we start from "all" and then prune to the
             # frozen allowlist, so a vendor upgrade can never auto-expose a new
             # write tool — the platform surface stays deterministic either way.
+            fingerprint = self._fingerprint(secret)
             mode = "all" if self.write_enabled else "read-only"
-            fingerprint = hashlib.sha256(
-                json.dumps([secret, mode, self.media_policy.fingerprint()], sort_keys=True).encode()
-            ).hexdigest()
             with _PROCESS_RUNTIME_LOCK:
                 if _PROCESS_FINGERPRINT is not None and fingerprint != _PROCESS_FINGERPRINT:
                     raise ProviderError("Telegram process configuration changed; restart required")
@@ -388,6 +386,51 @@ class TelegramAdapter:
                 self._runtime = runtime
                 self._server = runtime.mcp
                 return self._server
+
+    def _fingerprint(self, secret: dict[str, str]) -> str:
+        mode = "all" if self.write_enabled else "read-only"
+        return hashlib.sha256(
+            json.dumps([secret, mode, self.media_policy.fingerprint()], sort_keys=True).encode()
+        ).hexdigest()
+
+    async def activate_account(self, label: str) -> bool:
+        """Hot-add one newly saved ``TELEGRAM_SESSION_STRING_<LABEL>`` to the loaded runtime.
+
+        Only a pure addition is accepted: every other secret key must be exactly
+        what the process was started with (same fingerprint), so a changed API
+        hash or session still requires a restart. Returns False when no runtime
+        is loaded yet (the next load picks the account up from the file).
+        """
+        global _PROCESS_FINGERPRINT
+        if _ACCOUNT_LABEL.fullmatch(label) is None or label == "default":
+            raise ProviderError("only labelled accounts can be activated without restart")
+        if self._runtime is None:
+            return False
+        key = f"TELEGRAM_SESSION_STRING_{label.upper()}"
+        async with self._load_lock:
+            runtime = self._runtime
+            if label in getattr(runtime, "clients", {}):
+                return True
+            secret = {k: v for k, v in self._secret().items() if self._allowed_secret_key(k)}
+            value = secret.get(key)
+            if not value:
+                raise ProviderError("Telegram account session is not saved")
+            previous = {k: v for k, v in secret.items() if k != key}
+            with _PROCESS_RUNTIME_LOCK:
+                if self._fingerprint(previous) != _PROCESS_FINGERPRINT:
+                    raise ProviderError("Telegram process configuration changed; restart required")
+            from telethon.sessions import StringSession
+
+            client = runtime._build_client(StringSession(value), label)
+            await client.connect()
+            if not await client.is_user_authorized():
+                await client.disconnect()
+                raise ProviderError("new Telegram session is not authorized")
+            os.environ[key] = value
+            runtime.clients[label] = client
+            with _PROCESS_RUNTIME_LOCK:
+                _PROCESS_FINGERPRINT = self._fingerprint(secret)
+        return True
 
     @staticmethod
     def _prune_to_write_allowlist(server: Any) -> None:

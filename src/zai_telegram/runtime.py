@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import math
 import time
 from contextvars import ContextVar
@@ -103,6 +104,24 @@ class Runtime:
         self.registry = Registry(self)
         # One immutable credential set per process; never consult caller-provided paths.
         self.secret_values = config.secrets
+
+    def grant_account(self, actor: str, label: str) -> bool:
+        """Grant ``label`` to ``actor`` in the live config (after the bindings file changed).
+
+        Returns True when the account is selectable now. Tool schemas carry the
+        ``account`` argument only on multi-account servers, so a server started
+        single-account still needs a restart before the label can be chosen.
+        """
+        grants = {name: list(labels) for name, labels in self.config.account_grants.items()}
+        labels = grants.setdefault(str(actor), [])
+        if label not in labels:
+            labels.append(label)
+        selectable = self.config.multi_account
+        updated = dataclasses.replace(self.config, bindings=grants, account_grants={})
+        self.config = self.settings = updated
+        self.store.config = updated
+        self.secret_values = updated.secrets
+        return selectable
 
     def require_scopes(self, *scopes):
         def check(context):
