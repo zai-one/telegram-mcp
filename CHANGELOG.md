@@ -2,9 +2,10 @@
 
 ## Unreleased
 
+- `telegram_wait_for_settled_message` (toolset `events`): poll-based debounce — wait until a watched chat goes quiet for `settle_seconds` (1–30, default 6) after new messages, or return `status=partial` with pending messages / `status=timeout` if none; same ACL and paced reads as `telegram_wait_for_new_message` (closes the gap vs vendor event-driven `wait_for_settled_message`).
 - Opt-in toolset `advanced_read`: generic `telegram_read(tool, arguments)` over 43 reviewed read-only Telethon tools (participants, pinned, reactions, read-by, message links/context, folders, drafts, contacts, profiles, admin log...). Never part of `all`; with a chat allowlist only calls naming a permitted chat/user pass. Guide `telegram://guide/advanced-read`.
 - Router `instructions` rewritten as intent → first tool → skill/guide, with a fallback to `telegram://playbook`; playbook lists all routes, skills and guides. New guide `accounts`, new skill `telegram-watch-replies`.
-- Router eval (`tests/eval/router_cases.json`, 23 colloquial EN/RU requests) checks router → skill/guide → first tool, and fails if any tool, skill or guide is unreachable from the router. Token budget now also caps the always-loaded context (instructions + tools/list + skill frontmatters, ≈3.9k tokens default).
+- Router eval (`tests/eval/router_cases.json`, 26 colloquial EN/RU requests) checks router → skill/guide → first tool, and fails if any tool, skill or guide is unreachable from the router. Token budget now also caps the always-loaded context (instructions + tools/list + skill frontmatters, ≈3.9k tokens default).
 - One-minute install: `uvx --from git+https://github.com/zai-one/telegram-mcp zai-telegram-mcp-setup`; the wizard writes a `uvx` client entry when run from uvx (`ZAI_TELEGRAM_UVX_FROM` overrides the source).
 
 - Multi-account with labels: list-valued bindings (`{"actor": ["default", "work"]}`, first = default) add an optional per-call `account` argument to every tool and `telegram_list_accounts`; rate limits, poll cursors and outbox idempotency are per account, and `telegram_outbox_status` records carry `account_label`. String bindings keep the previous schema byte-for-byte.

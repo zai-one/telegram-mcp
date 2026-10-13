@@ -14,6 +14,8 @@ from zai_telegram.transport import ProviderError
 
 WAIT_MAX_SECONDS = 55
 WAIT_MIN_INTERVAL = 5.0
+SETTLE_MIN_SECONDS = 1
+SETTLE_MAX_SECONDS = 30
 _sleep = asyncio.sleep
 _monotonic = time.monotonic
 
@@ -256,4 +258,95 @@ def register_polling(server, runtime):
         result["reports"] = [report for report in result["reports"] if report["messages"]]
         result["status"] = "new_messages"
         result["mode"] = "wait"
+        return result
+
+    @server.tool(
+        auth=runtime.require_scopes("telegram:read"),
+        annotations={"readOnlyHint": True, "openWorldHint": True},
+    )
+    async def telegram_wait_for_settled_message(
+        chat_ids: list[str],
+        settle_seconds: int = 6,
+        max_wait_seconds: int = 50,
+        max_per_chat: int = 20,
+    ) -> dict:
+        """Debounced wait: block until a chat goes quiet for settle_seconds after new messages, or max_wait ends."""
+        if type(settle_seconds) is not int or not SETTLE_MIN_SECONDS <= settle_seconds <= SETTLE_MAX_SECONDS:
+            raise ValueError(
+                f"settle_seconds must be between {SETTLE_MIN_SECONDS} and {SETTLE_MAX_SECONDS}"
+            )
+        if type(max_wait_seconds) is not int or not 1 <= max_wait_seconds <= WAIT_MAX_SECONDS:
+            raise ValueError(f"max_wait_seconds must be between 1 and {WAIT_MAX_SECONDS}")
+        started = _monotonic()
+        deadline = started + max_wait_seconds
+        actor = runtime.current_access().principal_id
+        interval = max(WAIT_MIN_INTERVAL, 2.5 * len(chat_ids))
+        # Local baseline first (same as wait_for_new_message); do not ack later polls so
+        # one batch_id covers the whole burst for the caller.
+        result = await _poll(chat_ids, max_per_chat)
+        if any(report["baseline_only"] for report in result["reports"]):
+            store.acknowledge(actor, result["batch_id"])
+            result = {"reports": [], "batch_id": None}
+        seen: dict[str, set[int]] = {chat: set() for chat in chat_ids}
+        last_new_at: float | None = None
+        message_count = 0
+        settled = False
+
+        def ingest(poll: dict) -> bool:
+            nonlocal last_new_at, message_count
+            grew = False
+            for report in poll["reports"]:
+                chat = report["chat_id"]
+                for row in report["messages"]:
+                    mid = row["message_id"]
+                    if mid not in seen[chat]:
+                        seen[chat].add(mid)
+                        message_count += 1
+                        grew = True
+            if grew:
+                last_new_at = _monotonic()
+            return grew
+
+        if any(report.get("messages") for report in result.get("reports", [])):
+            ingest(result)
+        while True:
+            now = _monotonic()
+            remaining = deadline - now
+            if remaining <= 0:
+                break
+            if last_new_at is None:
+                # Still waiting for the first new message — pace polls (~24 reads/min).
+                await _sleep(min(interval, remaining))
+                if _monotonic() >= deadline:
+                    break
+                result = await _poll(chat_ids, max_per_chat)
+                ingest(result)
+                continue
+            until_settle = settle_seconds - (now - last_new_at)
+            if until_settle > 0:
+                await _sleep(min(until_settle, remaining))
+                if _monotonic() >= deadline:
+                    break
+            # Quiet window elapsed (or zero): confirm no newer messages landed.
+            result = await _poll(chat_ids, max_per_chat)
+            if ingest(result):
+                continue
+            settled = True
+            break
+
+        waited = round(min(_monotonic() - started, float(max_wait_seconds)), 3)
+        if message_count == 0:
+            return {
+                "status": "timeout",
+                "waited_seconds": waited,
+                "settle_seconds": settle_seconds,
+                "chat_ids": chat_ids,
+                "message_count": 0,
+            }
+        result["reports"] = [report for report in result["reports"] if report["messages"]]
+        result["status"] = "settled" if settled else "partial"
+        result["mode"] = "wait_settled"
+        result["settle_seconds"] = settle_seconds
+        result["waited_seconds"] = waited
+        result["message_count"] = message_count
         return result
