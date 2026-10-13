@@ -1,0 +1,26 @@
+{
+  "name": "telegram",
+  "version": "0.4.0",
+  "description": "Telegram (MTProto) MCP for your own account plus skills: inbox triage, safe send, chat research, group admin.",
+  "author": {"name": "ZAI.ONE", "url": "https://github.com/zai-one"},
+  "homepage": "https://github.com/zai-one/telegram-mcp",
+  "repository": "https://github.com/zai-one/telegram-mcp",
+  "license": "LicenseRef-ZAI-ONE",
+  "keywords": ["telegram", "mtproto", "inbox", "messaging"],
+  "skills": "./skills/",
+  "mcpServers": {
+    "telegram": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/zai-one/telegram-mcp@v0.4.0",
+        "zai-telegram-mcp",
+        "--config",
+        "${TELEGRAM_MCP_CONFIG}"
+      ],
+      "env": {
+        "TELEGRAM_TOOLSETS": "default"
+      }
+    }
+  }
+}

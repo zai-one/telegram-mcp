@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Toolsets (`TELEGRAM_TOOLSETS`, `TELEGRAM_TOOLS`, `TELEGRAM_DISABLED_TOOLS`, `--toolsets`), read-only mode (`TELEGRAM_READ_ONLY`, `--read-only`) and write categories for `telegram_write`. Unset = previous surface.
+- Per-chat ACL: `TELEGRAM_ALLOWED_CHATS` (deny-by-default when set) and `TELEGRAM_DENIED_CHATS`; listings are filtered. Under an allowlist the generic `telegram_write` fails closed: a call must name an allowed chat (or, without a chat, an allowed `user_id`/`channel`), and account-wide or chat-creating writes (join by link, create group/channel, profile, privacy, folders, contacts import) are denied.
+- Compact tool descriptions and titles; router `instructions`; error envelopes gain `hint` and `docs`; new codes `chat_access_denied`, `tool_disabled`.
+- Resources `telegram://toolsets`, `telegram://playbook`, `telegram://guide/{topic}`; prompts `inbox_digest`, `publish_post`, `chat_research`.
+- Self-contained skills (`skills/`), Claude Code plugin + marketplace (`.claude-plugin/`), `server.json`, `scripts/token_budget.py` (CI via tests).
+- Vendor fixes: GIF search uses the @gif inline bot (Telethon has no `messages.SearchGifsRequest`); `import_contacts` uses `types.InputPhoneContact`.
+
 ## 0.4.0
 
 - Telethon 1.44.0 → 1.45.0 (MTProto layer 227 → 229), backward-compatible: `types.User`, `types.Channel`, `types.ChatAdminRights` and `types.ChatBannedRights` only gained optional trailing keyword arguments.

@@ -1,0 +1,13 @@
+{
+  "name": "zai-telegram",
+  "owner": {"name": "ZAI.ONE", "url": "https://github.com/zai-one"},
+  "plugins": [
+    {
+      "name": "telegram",
+      "source": "./",
+      "description": "Telegram MCP + skills (inbox triage, safe send, chat research, group admin).",
+      "category": "communication",
+      "tags": ["telegram", "mcp", "skills"]
+    }
+  ]
+}
