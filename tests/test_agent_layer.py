@@ -209,3 +209,56 @@ def test_vendor_upstream_bugs_are_fixed():
     assert hasattr(types, "InputPhoneContact") and not hasattr(functions.contacts, "InputPhoneContact")
     assert "functions.contacts.InputPhoneContact" not in contacts
     assert "types.InputPhoneContact(" in contacts
+
+
+def test_compact_summary_mode_drops_empty_and_truncates():
+    from zai_telegram.toolsets import compact
+
+    payload = {"results": [{"id": 1, "message": "x" * 900, "reply_to": None, "entities": [1], "tags": []}]}
+    out = compact(payload, 100)["results"][0]
+    assert out["message_truncated"] and out["message_length"] == 900 and len(out["message"]) == 101
+    assert "reply_to" not in out and "entities" not in out and "tags" not in out
+    assert json.loads(compact(json.dumps(payload), 100))["results"][0]["message_truncated"]
+
+
+async def test_summary_detail_applies_to_reads_only(config):
+    surface = build_surface(detail="summary", max_text_chars=50)
+    adapter = FixtureAdapter()
+    async with Client(create_server(config, transport="stdio", adapter=adapter, surface=surface)) as client:
+        chats = (await client.call_tool("telegram_list_chats", {})).structured_content
+        sent = (await client.call_tool("telegram_send_message", SEND)).data
+    assert "results" in json.dumps(chats) and sent["status"] == "sent"
+    with pytest.raises(ValueError):
+        build_surface(detail="tiny")
+
+
+async def test_insight_tools_route_through_reviewed_allowlist(config):
+    adapter = FixtureAdapter()
+    async with Client(create_server(config, transport="stdio", adapter=adapter)) as client:
+        await client.call_tool("telegram_list_topics", {"chat_id": "-100123", "limit": 10})
+        await client.call_tool("telegram_get_admins", {"chat_id": "-100123"})
+        await client.call_tool("telegram_get_chat_stats", {"chat_id": "@channel"})
+    assert [call[0] for call in adapter.calls] == [
+        "telegram_list_topics",
+        "telegram_get_admins",
+        "telegram_get_chat_stats",
+    ]
+    from zai_telegram.adapter import TelegramAdapter
+    from zai_telegram.transport import ProviderError
+
+    upstream, values = TelegramAdapter._upstream_call(
+        "telegram_list_topics", {"chat_id": "-100123", "limit": 10, "account": "default"}
+    )
+    assert upstream == "list_topics" and values["chat_id"] == -100123
+    with pytest.raises(ProviderError):
+        TelegramAdapter._upstream_call(
+            "telegram_list_topics", {"chat_id": "@x", "limit": 10, "account": "default"}
+        )
+
+
+def test_vendor_chat_stats_patch_uses_telethon_get_stats():
+    from telethon import TelegramClient, functions
+
+    chats = (ROOT / "src/zai_telegram/_vendor/telegram_mcp/tools/chats.py").read_text(encoding="utf-8")
+    assert "async def get_chat_stats" in chats and "cl.get_stats(entity)" in chats
+    assert hasattr(TelegramClient, "get_stats") and hasattr(functions.stats, "GetBroadcastStatsRequest")

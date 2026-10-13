@@ -287,6 +287,8 @@ def register_tools(server: Any, runtime: Any) -> None:
         except (ProviderError, PermissionError, ValueError) as exc:
             raise safe_provider_error("telegram", exc) from None
 
+    _register_insights_after(server, runtime, _telegram_call)
+
     @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_list_chats(
         limit: int = 20,
@@ -712,3 +714,9 @@ def register_tools(server: Any, runtime: Any) -> None:
             raise safe_provider_error("telegram", ValueError("arguments must be an object"))
         payload = {key: value for key, value in arguments.items() if key != "account"}
         return await _telegram_write(tool, payload, idempotency_key)
+
+
+def _register_insights_after(server: Any, runtime: Any, call: Any) -> None:
+    from zai_telegram.insights import register_insights
+
+    register_insights(server, runtime, call)

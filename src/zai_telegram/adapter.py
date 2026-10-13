@@ -33,6 +33,10 @@ TELEGRAM_TOOL_MAP = {
     "telegram_get_history": "get_history",
     "telegram_search_contacts": "search_contacts",
     "telegram_search_public_chats": "search_public_chats",
+    # Chat insights (read-only upstream tools; get_chat_stats is a reviewed zai vendor patch).
+    "telegram_list_topics": "list_topics",
+    "telegram_get_admins": "get_admins",
+    "telegram_get_chat_stats": "get_chat_stats",
 }
 
 # Frozen write allowlist: upstream tool name -> risk tier. Derived once from the
@@ -486,6 +490,17 @@ class TelegramAdapter:
         elif platform_tool == "telegram_get_history":
             TelegramAdapter._bounded_text(values.get("chat_id"), "chat_id", 1, 128)
             TelegramAdapter._bounded_integer(values.get("limit"), "limit", 1, 100)
+        elif platform_tool == "telegram_list_topics":
+            TelegramAdapter._bounded_text(values.get("chat_id"), "chat_id", 1, 128)
+            TelegramAdapter._bounded_integer(values.get("limit"), "limit", 1, 100)
+            if values.get("search_query") is not None:
+                TelegramAdapter._bounded_text(values.get("search_query"), "search_query", 1, 128)
+            # Upstream declares chat_id: int; numeric ids only.
+            if not str(values["chat_id"]).lstrip("-").isdigit():
+                raise ProviderError("Telegram list_topics needs a numeric chat_id")
+            values["chat_id"] = int(values["chat_id"])
+        elif platform_tool in {"telegram_get_admins", "telegram_get_chat_stats"}:
+            TelegramAdapter._bounded_text(values.get("chat_id"), "chat_id", 1, 128)
         elif platform_tool == "telegram_search_contacts":
             TelegramAdapter._bounded_text(values.get("query"), "query", 1, 128)
         elif platform_tool == "telegram_search_public_chats":

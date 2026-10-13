@@ -22,9 +22,11 @@ from zai_telegram.runtime import Runtime
 from zai_telegram.tools import register_tools
 from zai_telegram.toolsets import (
     LISTING_TOOLS,
+    WRITE_TOOL_NAMES,
     Surface,
     build_surface,
     chat_targets,
+    compact,
     filter_result,
     surface_from_env,
     write_denied_by_allowlist,
@@ -80,6 +82,8 @@ class ToolRegistrar:
                     result = await function(*args, **kwargs)
                     if name in LISTING_TOOLS:
                         result = filter_result(result, self.surface.chats)
+                    if self.surface.detail == "summary" and name not in WRITE_TOOL_NAMES:
+                        result = compact(result, self.surface.max_text_chars)
                     return result
 
                 return await self.runtime.execute(name, arguments, guarded)
