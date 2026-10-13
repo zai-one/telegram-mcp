@@ -280,13 +280,33 @@ def register_polling(server, runtime):
         started = _monotonic()
         deadline = started + max_wait_seconds
         actor = runtime.current_access().principal_id
+        # Spread reads so a wait never exceeds ~24 provider reads per minute.
         interval = max(WAIT_MIN_INTERVAL, 2.5 * len(chat_ids))
         # Local baseline first (same as wait_for_new_message); do not ack later polls so
         # one batch_id covers the whole burst for the caller.
         result = await _poll(chat_ids, max_per_chat)
+        last_poll_at = _monotonic()
         if any(report["baseline_only"] for report in result["reports"]):
-            store.acknowledge(actor, result["batch_id"])
-            result = {"reports": [], "batch_id": None}
+            # Baseline only the chats without a cursor. Already-watched chats keep
+            # their acknowledged cursor, so their unread messages stay in the result.
+            new_chats = [report for report in result["reports"] if report["baseline_only"]]
+            watched = [report for report in result["reports"] if not report["baseline_only"]]
+            baseline = store.prepare(
+                actor, {report["chat_id"]: [None, report["proposed_message_id"]] for report in new_chats}
+            )
+            store.acknowledge(actor, baseline)
+            result["reports"] = watched
+            result["batch_id"] = (
+                store.prepare(
+                    actor,
+                    {
+                        report["chat_id"]: [report["after_message_id"], report["proposed_message_id"]]
+                        for report in watched
+                    },
+                )
+                if watched
+                else None
+            )
         seen: dict[str, set[int]] = {chat: set() for chat in chat_ids}
         last_new_at: float | None = None
         message_count = 0
@@ -314,23 +334,24 @@ def register_polling(server, runtime):
             remaining = deadline - now
             if remaining <= 0:
                 break
+            # Every poll reads each chat, so polls are at least `interval` apart
+            # (~24 reads/min) in both phases; the settle window cannot shorten that.
+            until_next_poll = last_poll_at + interval - now
             if last_new_at is None:
-                # Still waiting for the first new message — pace polls (~24 reads/min).
-                await _sleep(min(interval, remaining))
+                # Still waiting for the first new message.
+                delay = until_next_poll
+            else:
+                delay = max(until_next_poll, settle_seconds - (now - last_new_at))
+            if delay > 0:
+                await _sleep(min(delay, remaining))
                 if _monotonic() >= deadline:
                     break
-                result = await _poll(chat_ids, max_per_chat)
-                ingest(result)
-                continue
-            until_settle = settle_seconds - (now - last_new_at)
-            if until_settle > 0:
-                await _sleep(min(until_settle, remaining))
-                if _monotonic() >= deadline:
-                    break
-            # Quiet window elapsed (or zero): confirm no newer messages landed.
             result = await _poll(chat_ids, max_per_chat)
-            if ingest(result):
+            last_poll_at = _monotonic()
+            grew = ingest(result)
+            if last_new_at is None or grew:
                 continue
+            # Quiet window elapsed and the confirming poll found nothing newer.
             settled = True
             break
 

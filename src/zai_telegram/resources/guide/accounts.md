@@ -13,6 +13,8 @@ Waiting / watching
   Poll-based debounce — returns when a chat has had no new messages for `settle_seconds`
   (`status=settled`), or `status=partial` with pending messages if the deadline hits mid-burst,
   or `status=timeout` if nothing arrived. Prefer this when someone may send several messages in a row.
+  Reads are paced like the plain wait (polls >= 2.5 s x chats apart, ~24 reads/min), so the quiet
+  window is never shorter than that interval. Unread messages already waiting in watched chats are returned.
 - After processing a batch call `telegram_acknowledge_poll(batch_id)`, otherwise the same messages return.
   Acknowledge with the same `account` as the poll/wait that returned the batch: batches and cursors are
   per account, so another account does not find the batch.
