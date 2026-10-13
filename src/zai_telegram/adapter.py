@@ -39,6 +39,58 @@ TELEGRAM_TOOL_MAP = {
     "telegram_get_chat_stats": "get_chat_stats",
 }
 
+# Reviewed read-only upstream tools reachable through the generic
+# ``telegram_read`` (opt-in toolset ``advanced_read``). Excluded on review:
+# invite-link tools (may create links), GIF search (inline-bot query), event
+# waits (global handlers; use telegram_wait_for_new_message) and list_accounts.
+TELEGRAM_READ_ALLOWLIST = frozenset(
+    {
+        "get_chats",
+        "list_chats",
+        "get_chat",
+        "get_full_chat",
+        "resolve_username",
+        "search_public_chats",
+        "get_common_chats",
+        "get_message_read_by",
+        "get_message_link",
+        "list_topics",
+        "get_chat_stats",
+        "list_contacts",
+        "search_contacts",
+        "get_contact_ids",
+        "get_direct_chat_by_contact",
+        "get_contact_chats",
+        "get_last_interaction",
+        "get_blocked_users",
+        "list_folders",
+        "get_folder",
+        "get_participants",
+        "get_admins",
+        "get_banned_users",
+        "get_recent_actions",
+        "get_media_info",
+        "get_sticker_sets",
+        "get_messages",
+        "get_scheduled_messages",
+        "list_inline_buttons",
+        "list_messages",
+        "get_message_context",
+        "search_messages",
+        "search_global",
+        "get_history",
+        "get_pinned_messages",
+        "get_message_reactions",
+        "get_drafts",
+        "get_me",
+        "get_privacy_settings",
+        "get_full_user",
+        "get_bot_info",
+        "get_user_photos",
+        "get_user_status",
+    }
+)
+
 # Frozen write allowlist: upstream tool name -> risk tier. Derived once from the
 # vendored telegram-mcp v3.2.0 annotations (readOnlyHint is not True) and pinned
 # here so a vendor upgrade can never auto-expose a new write tool — a new
@@ -455,6 +507,20 @@ class TelegramAdapter:
 
     @staticmethod
     def _upstream_call(platform_tool: str, arguments: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        if platform_tool == "telegram_read":
+            account = arguments.get("account")
+            if not isinstance(account, str) or _ACCOUNT_LABEL.fullmatch(account) is None:
+                raise ProviderError("Telegram account binding is required")
+            name, nested = arguments.get("tool"), arguments.get("arguments")
+            if name not in TELEGRAM_READ_ALLOWLIST:
+                raise ProviderError("Telegram read tool is not in the reviewed read allowlist")
+            if not isinstance(nested, dict) or len(json.dumps(nested, default=str)) > 4096:
+                raise ProviderError("Telegram read arguments must be a small object")
+            values = {key: value for key, value in nested.items() if key != "account" and value is not None}
+            for key in ("limit", "page_size"):
+                if key in values:
+                    TelegramAdapter._bounded_integer(values[key], key, 1, 200)
+            return name, {**values, "account": account}
         upstream = TELEGRAM_TOOL_MAP.get(platform_tool)
         if upstream is None:
             raise ProviderError("Telegram write or unknown tool denied by platform allowlist")

@@ -288,6 +288,7 @@ def register_tools(server: Any, runtime: Any) -> None:
             raise safe_provider_error("telegram", exc) from None
 
     _register_insights_after(server, runtime, _telegram_call)
+    _register_generic_read(server, runtime, _telegram_call)
 
     @server.tool(auth=require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
     async def telegram_list_chats(
@@ -715,6 +716,13 @@ def register_tools(server: Any, runtime: Any) -> None:
             raise safe_provider_error("telegram", ValueError("arguments must be an object"))
         payload = {key: value for key, value in arguments.items() if key != "account"}
         return await _telegram_write(tool, payload, idempotency_key)
+
+
+def _register_generic_read(server: Any, runtime: Any, call: Any) -> None:
+    @server.tool(auth=runtime.require_scopes("telegram:read"), annotations=READ_ANNOTATIONS)
+    async def telegram_read(tool: str, arguments: dict[str, Any] | None = None) -> Any:
+        """Run one reviewed read-only upstream Telegram tool by name."""
+        return await call("telegram_read", {"tool": tool, "arguments": dict(arguments or {})})
 
 
 def _register_insights_after(server: Any, runtime: Any, call: Any) -> None:

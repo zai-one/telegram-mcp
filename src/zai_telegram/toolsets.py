@@ -56,6 +56,10 @@ TOOLSETS: dict[str, dict[str, Any]] = {
         "description": "Cursor polling and bounded wait for new messages, no read receipts.",
         "tools": ("telegram_poll_messages", "telegram_acknowledge_poll", "telegram_wait_for_new_message"),
     },
+    "advanced_read": {
+        "description": "Opt-in: generic telegram_read over ~40 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",
+        "tools": ("telegram_read",),
+    },
     "advanced_write": {
         "description": "Generic telegram_write over the reviewed allowlist, limited to enabled write categories.",
         "tools": ("telegram_write",),
@@ -142,8 +146,14 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
 
 DEFAULT_TOOLSETS = ("core", "messages_read", "messages_write", "events", "chat_insights")
 WRITE_TOOLSETS = frozenset({"messages_write", "advanced_write"} | set(WRITE_CATEGORIES))
-ALL_TOOLSETS = tuple(TOOLSETS) + tuple(name for name in WRITE_CATEGORIES if name not in TOOLSETS)
-ALL_TOOLS = frozenset(tool for spec in TOOLSETS.values() for tool in spec["tools"])
+# Opt-in toolsets are never part of "all": name them explicitly (token budget).
+OPT_IN_TOOLSETS = frozenset({"advanced_read"})
+KNOWN_TOOLSETS = tuple(TOOLSETS) + tuple(name for name in WRITE_CATEGORIES if name not in TOOLSETS)
+ALL_TOOLSETS = tuple(name for name in KNOWN_TOOLSETS if name not in OPT_IN_TOOLSETS)
+KNOWN_TOOLS = frozenset(tool for spec in TOOLSETS.values() for tool in spec["tools"])
+ALL_TOOLS = frozenset(
+    tool for name, spec in TOOLSETS.items() if name not in OPT_IN_TOOLSETS for tool in spec["tools"]
+)
 WRITE_TOOL_NAMES = frozenset(TOOLSETS["messages_write"]["tools"] + TOOLSETS["advanced_write"]["tools"])
 
 # Argument names that address a chat; checked against the chat ACL.
@@ -302,7 +312,7 @@ def build_surface(
                 else [name]
             )
             for item in expanded:
-                if item not in ALL_TOOLSETS:
+                if item not in KNOWN_TOOLSETS:
                     raise ValueError(f"unknown Telegram toolset: {item}")
                 if item not in names:
                     names.append(item)
@@ -313,7 +323,7 @@ def build_surface(
     if any(name in WRITE_CATEGORIES and name != "messages_write" for name in names):
         tools.add("telegram_write")
     for tool in extra_tools:
-        if tool not in ALL_TOOLS:
+        if tool not in KNOWN_TOOLS:
             raise ValueError(f"unknown Telegram tool: {tool}")
         tools.add(tool)
     tools -= set(disabled_tools)
@@ -372,6 +382,10 @@ def chat_targets(tool: str, arguments: Mapping[str, Any]) -> list[Any]:
                 elif value is not None and value != "":
                     named.append(value)
         targets.extend(named)
+    if tool == "telegram_read" and isinstance(nested, Mapping):
+        targets.extend(chat_targets("upstream", nested))
+        # A user/contact id addresses that person's private chat.
+        targets.extend(nested[key] for key in ("user_id", "contact_id", "username") if nested.get(key))
     for item in arguments.get("items") or ():
         if isinstance(item, Mapping) and item.get("recipient_ref") is not None:
             targets.append(item["recipient_ref"])

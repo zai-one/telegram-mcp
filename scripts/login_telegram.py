@@ -1,4 +1,5 @@
 """Compatibility import; interactive login is shipped in the installed package."""
+
 import sys
 from pathlib import Path
 
