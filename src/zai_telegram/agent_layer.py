@@ -115,7 +115,7 @@ def build_instructions(surface: Surface, update_hint: str | None = None) -> str:
     acl = "on" if surface.chats.active else "off"
     active = "all" if surface.toolsets == ALL_TOOLSETS else ",".join(surface.toolsets)
     router = (
-        f"Telegram MCP: the user's own Telegram account (MTProto). Toolsets: {active}; "
+        f"Telegram MCP: read, search and (when allowed) send messages in the user's own Telegram account (MTProto). Toolsets: {active}; "
         f"{mode}; chat ACL {acl} (see telegram://toolsets).\n"
         "Start: telegram_get_inbox or telegram_list_chats for chat_id; people via telegram_resolve_recipient "
         "(act only on status=unique). Never guess IDs.\n"
