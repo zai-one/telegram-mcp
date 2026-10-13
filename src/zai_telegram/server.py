@@ -14,7 +14,7 @@ from fastmcp.server.auth.providers.jwt import JWTVerifier
 
 from zai_telegram import __version__
 from zai_telegram.agent_layer import TOOL_DESCRIPTIONS, TOOL_TITLES, build_instructions, register_agent_layer
-from zai_telegram.config import ServiceConfig
+from zai_telegram.config import SELECTED_ACCOUNT, ServiceConfig
 from zai_telegram.errors import policy_error
 from zai_telegram.onboarding import check_config, load_config
 from zai_telegram.polling import register_polling
@@ -34,6 +34,9 @@ from zai_telegram.toolsets import (
 from zai_telegram.transport import LocalPreDispatchDenied, ProviderAdmissionDenied
 from zai_telegram.update_check import cached_update_hint, check_for_update, refresh_in_background
 
+# Tools that never touch a Telegram account (no ``account`` argument).
+ACCOUNTLESS_TOOLS = frozenset({"telegram_check_update", "telegram_list_accounts"})
+
 
 class ToolRegistrar:
     def __init__(self, server: FastMCP, runtime: Runtime, surface: Surface | None = None):
@@ -42,6 +45,11 @@ class ToolRegistrar:
 
     def _admit(self, name: str, arguments: dict[str, Any]) -> None:
         """Toolset write-category and per-chat ACL checks, before any provider call."""
+        selected = SELECTED_ACCOUNT.get()
+        if selected is not None and selected not in self.runtime.config.accounts_for(
+            self.runtime.current_access().principal_id
+        ):
+            raise policy_error("account_not_granted")
         if name == "telegram_write" and arguments.get("tool") not in self.surface.write_tools:
             raise policy_error("tool_disabled")
         chats = self.surface.chats
@@ -70,9 +78,35 @@ class ToolRegistrar:
                 except PermissionError:
                     return function
             signature = inspect.signature(function)
+            multi = self.runtime.config.multi_account and name not in ACCOUNTLESS_TOOLS
+            public_signature = signature
+            if multi:
+                # Per-call account selection, only when some principal has >1
+                # account: single-account installs keep the old schema/tokens.
+                public_signature = signature.replace(
+                    parameters=[
+                        *signature.parameters.values(),
+                        inspect.Parameter(
+                            "account",
+                            inspect.Parameter.KEYWORD_ONLY,
+                            default=None,
+                            annotation=str | None,
+                        ),
+                    ]
+                )
 
             @wraps(function)
             async def wrapped(*args: Any, **kwargs: Any) -> Any:
+                account = kwargs.pop("account", None) if multi else None
+                if account is not None and not isinstance(account, str):
+                    raise policy_error("account_not_granted")
+                token = SELECTED_ACCOUNT.set(account or None)
+                try:
+                    return await call(*args, **kwargs)
+                finally:
+                    SELECTED_ACCOUNT.reset(token)
+
+            async def call(*args: Any, **kwargs: Any) -> Any:
                 bound = signature.bind(*args, **kwargs)
                 bound.apply_defaults()
                 arguments = dict(bound.arguments)
@@ -88,6 +122,9 @@ class ToolRegistrar:
 
                 return await self.runtime.execute(name, arguments, guarded)
 
+            wrapped.__signature__ = public_signature  # type: ignore[attr-defined]
+            if multi:
+                wrapped.__annotations__ = {**function.__annotations__, "account": "str | None"}
             return self.server.tool(**opts)(wrapped)
 
         return decorate
@@ -137,8 +174,22 @@ def create_server(
     register_tools(registrar, runtime)
     register_polling(registrar, runtime)
     register_update_check(registrar, runtime)
+    if config.multi_account:
+        register_accounts(registrar, runtime)
     register_agent_layer(server, surface)
     return server
+
+
+def register_accounts(server: Any, runtime: Runtime) -> None:
+    @server.tool(
+        auth=runtime.require_scopes("telegram:read"),
+        annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False},
+    )
+    async def telegram_list_accounts() -> dict[str, Any]:
+        """Account labels you may pass as `account`; first is the default."""
+        actor = runtime.current_access().principal_id
+        labels = runtime.config.accounts_for(actor)
+        return {"default": labels[0] if labels else None, "accounts": list(labels)}
 
 
 def register_update_check(server: Any, runtime: Runtime) -> None:

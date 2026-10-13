@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Multi-account with labels: list-valued bindings (`{"actor": ["default", "work"]}`, first = default) add an optional per-call `account` argument to every tool and `telegram_list_accounts`; rate limits, poll cursors and outbox idempotency are per account, and `telegram_outbox_status` records carry `account_label`. String bindings keep the previous schema byte-for-byte.
+- `telegram_wait_for_new_message` (toolset `events`): bounded long-poll (1–55 s) over 1–10 chats with a local baseline, paced reads and `status=timeout`; respects the chat ACL; no read receipts.
+
 - License: LicenseRef-ZAI-ONE 2.0 (source-available). Free install and use for yourself and your organisation, including commercial work; issues and pull requests welcome; copying code into other projects, redistribution, embedding and competing hosted services need written permission. Earlier releases keep their LicenseRef-ZAI-ONE 1.0 terms (see NOTICE). README first screen: one-line scope, why this MCP, maintenance and update check.
 
 - Compact replies: `TELEGRAM_RESPONSE_DETAIL=summary` (+ `TELEGRAM_MAX_TEXT_CHARS`) drops empty fields and truncates long texts with explicit markers; default `full` is unchanged.

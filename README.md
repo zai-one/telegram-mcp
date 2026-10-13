@@ -127,6 +127,11 @@ Nothing changes unless you set these variables (default: every tool, every chat)
 
 Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (`telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats`), `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
 
+### Several accounts and waiting for replies
+
+- **Multi-account:** add `TELEGRAM_SESSION_STRING_<LABEL>` (e.g. `_WORK`) to the secret file and bind a list in the bindings file: `{"local-operator": ["default", "work"]}`. The first label is the default; every tool then accepts an optional `account` argument and `telegram_list_accounts` shows the labels. Rate limits, cursors and the outbox are per account (outbox records show `account_label`); acknowledge a poll or wait batch with the same `account` that produced it. A plain string binding keeps the old single-account schema (no extra tokens).
+- **Wait for a message:** `telegram_wait_for_new_message(chat_ids, timeout_seconds<=55)` blocks until a new message arrives or returns `status=timeout`. It respects the chat allowlist, never sends read receipts and paces reads (≤ ~24/min).
+
 ## Skills, prompts and guides
 
 Self-contained skills in [`skills/`](skills/) (each folder has `SKILL.md` plus its own `references/`, `templates/`, `scripts/`): `telegram-inbox-triage`, `telegram-safe-send`, `telegram-chat-research`, `telegram-group-admin`, `telegram-channel-report`. Copy a folder into your client's skills directory (`~/.claude/skills/`, `.agents/skills/`, `.cursor/skills/`) or install the plugin. Clients without skills get MCP prompts `inbox_digest`, `publish_post`, `chat_research` and resources `telegram://playbook`, `telegram://guide/{formatting|errors|flood-wait|acl|search-syntax|permissions}`.

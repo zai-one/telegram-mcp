@@ -233,9 +233,7 @@ def check_for_update(
                 record = {"checked_at": moment, **fetched, "attempted_at": moment, "failed_at": None}
                 result["source"] = "github"
             else:
-                last_good = (
-                    {key: record[key] for key in _RESULT_KEYS} if _has_result(record) else {}
-                )
+                last_good = {key: record[key] for key in _RESULT_KEYS} if _has_result(record) else {}
                 record = {**last_good, "attempted_at": moment, "failed_at": moment}
                 result["source"] = "stale_cache" if last_good else None
             _write_cache(record)

@@ -4,6 +4,7 @@ import json
 import os
 import re
 from collections.abc import Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -13,12 +14,19 @@ from zai_telegram.secrets import read_private_secret_env, require_private_file
 
 SCOPES = frozenset({"telegram:read", "telegram:write"})
 
+# Per-call account label chosen by the caller (``account`` tool argument).
+# ``None`` means the principal's default (first bound) account.
+SELECTED_ACCOUNT: ContextVar[str | None] = ContextVar("telegram_selected_account", default=None)
+
 
 @dataclass(frozen=True)
 class ServiceConfig:
     state_path: Path
     secret_path: Path
     bindings: Mapping[str, str] = field(default_factory=dict)
+    # actor -> every account label it may select (first = default). Filled from
+    # list-valued bindings; a string binding grants exactly one account.
+    account_grants: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     account_id: str = "default"
     principal_id: str = "local-operator"
     public_key: str = ""
@@ -51,16 +59,40 @@ class ServiceConfig:
                 raise ValueError("policy exceeds original default ceiling")
         if not isinstance(self.enabled, bool) or not isinstance(self.telegram_write_enabled, bool):
             raise ValueError("explicit boolean provider policy required")
-        copied = dict(self.bindings)
+        copied: dict[str, str] = {}
+        grants: dict[str, tuple[str, ...]] = {}
+        for actor, value in dict(self.bindings).items():
+            labels = tuple(value) if isinstance(value, list | tuple) else (value,)
+            if not labels or len(labels) > 16 or len(set(labels)) != len(labels):
+                raise ValueError("invalid server-owned account binding")
+            copied[actor], grants[actor] = labels[0], labels
         if any(
             not isinstance(actor, str)
             or not 1 <= len(actor) <= 256
             or not isinstance(label, str)
             or re.fullmatch(r"[a-z][a-z0-9_]{0,31}", label) is None
-            for actor, label in copied.items()
+            for actor, labels in grants.items()
+            for label in labels
         ):
             raise ValueError("invalid server-owned account binding")
         object.__setattr__(self, "bindings", MappingProxyType(copied))
+        object.__setattr__(self, "account_grants", MappingProxyType(grants))
+
+    def accounts_for(self, actor: str) -> tuple[str, ...]:
+        return self.account_grants.get(str(actor), ())
+
+    def resolve_account(self, actor: str) -> str | None:
+        """Account for this call: the caller's selection if granted, else the default."""
+        selected = SELECTED_ACCOUNT.get()
+        if selected is None:
+            return self.bindings.get(str(actor))
+        if selected not in self.accounts_for(actor):
+            raise PermissionError("Telegram account label is not granted to this principal")
+        return selected
+
+    @property
+    def multi_account(self) -> bool:
+        return any(len(labels) > 1 for labels in self.account_grants.values())
 
     @property
     def secrets(self) -> tuple[str, ...]:

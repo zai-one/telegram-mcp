@@ -32,6 +32,7 @@ TOOLSETS: dict[str, dict[str, Any]] = {
             "telegram_get_chat",
             "telegram_resolve_recipient",
             "telegram_check_update",
+            "telegram_list_accounts",
         ),
     },
     "messages_read": {
@@ -52,8 +53,8 @@ TOOLSETS: dict[str, dict[str, Any]] = {
         "tools": ("telegram_list_topics", "telegram_get_admins", "telegram_get_chat_stats"),
     },
     "events": {
-        "description": "Cursor-based polling of selected chats without read receipts.",
-        "tools": ("telegram_poll_messages", "telegram_acknowledge_poll"),
+        "description": "Cursor polling and bounded wait for new messages, no read receipts.",
+        "tools": ("telegram_poll_messages", "telegram_acknowledge_poll", "telegram_wait_for_new_message"),
     },
     "advanced_write": {
         "description": "Generic telegram_write over the reviewed allowlist, limited to enabled write categories.",

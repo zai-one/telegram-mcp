@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -10,6 +11,11 @@ from uuid import uuid4
 
 from zai_telegram.media_policy import exact_chat
 from zai_telegram.transport import ProviderError
+
+WAIT_MAX_SECONDS = 55
+WAIT_MIN_INTERVAL = 5.0
+_sleep = asyncio.sleep
+_monotonic = time.monotonic
 
 
 class PollStore:
@@ -28,7 +34,7 @@ class PollStore:
             """)
 
     def identity(self, actor):
-        label = self.store.config.bindings.get(actor)
+        label = self.store.config.resolve_account(actor)
         if label is None:
             raise PermissionError("bound account required")
         return self.store.account, actor, label
@@ -137,6 +143,9 @@ def register_polling(server, runtime):
     )
     async def telegram_poll_messages(chat_ids: list[str], max_per_chat: int = 20) -> dict:
         """Poll selected numeric chats after acknowledged IDs; first poll proposes a baseline at now."""
+        return await _poll(chat_ids, max_per_chat)
+
+    async def _poll(chat_ids: list[str], max_per_chat: int) -> dict:
         if not 1 <= len(chat_ids) <= 10 or len(set(chat_ids)) != len(chat_ids):
             raise ValueError("provide 1 to 10 distinct numeric chat IDs")
         if any(re.fullmatch(r"-?[1-9][0-9]{0,18}", chat) is None for chat in chat_ids):
@@ -144,7 +153,7 @@ def register_polling(server, runtime):
         if type(max_per_chat) is not int or not 1 <= max_per_chat <= 50:
             raise ValueError("max_per_chat must be between 1 and 50")
         actor = runtime.current_access().principal_id
-        account = runtime.config.bindings[actor]
+        account = runtime.config.resolve_account(actor)
         cursors = store.cursors(actor, chat_ids)
         reports, proposal = [], {}
         for chat, before in cursors.items():
@@ -210,3 +219,41 @@ def register_polling(server, runtime):
         """Acknowledge a processed local poll batch without sending Telegram read receipts."""
         await runtime.registry.ensure_enabled("telegram")
         return store.acknowledge(runtime.current_access().principal_id, batch_id)
+
+    @server.tool(
+        auth=runtime.require_scopes("telegram:read"),
+        annotations={"readOnlyHint": True, "openWorldHint": True},
+    )
+    async def telegram_wait_for_new_message(
+        chat_ids: list[str], timeout_seconds: int = 30, max_per_chat: int = 20
+    ) -> dict:
+        """Bounded long-poll: block until a new message arrives in the chats or the timeout ends."""
+        if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= WAIT_MAX_SECONDS:
+            raise ValueError(f"timeout_seconds must be between 1 and {WAIT_MAX_SECONDS}")
+        deadline = _monotonic() + timeout_seconds
+        actor = runtime.current_access().principal_id
+        # Chats without a cursor get a local baseline at "now" first, so the
+        # wait only reports messages that arrive after the call started.
+        result = await _poll(chat_ids, max_per_chat)
+        if all(report["baseline_only"] for report in result["reports"]) or not any(
+            report["messages"] for report in result["reports"]
+        ):
+            if any(report["baseline_only"] for report in result["reports"]):
+                store.acknowledge(actor, result["batch_id"])
+            # Spread reads so a wait never exceeds ~24 provider reads per minute.
+            interval = max(WAIT_MIN_INTERVAL, 2.5 * len(chat_ids))
+            while True:
+                remaining = deadline - _monotonic()
+                if remaining <= 0:
+                    return {"status": "timeout", "waited_seconds": timeout_seconds, "chat_ids": chat_ids}
+                await _sleep(min(interval, remaining))
+                if _monotonic() >= deadline:
+                    return {"status": "timeout", "waited_seconds": timeout_seconds, "chat_ids": chat_ids}
+                result = await _poll(chat_ids, max_per_chat)
+                if any(report["messages"] for report in result["reports"]):
+                    break
+                # Nothing new: keep the cursors where they are (no ack needed).
+        result["reports"] = [report for report in result["reports"] if report["messages"]]
+        result["status"] = "new_messages"
+        result["mode"] = "wait"
+        return result

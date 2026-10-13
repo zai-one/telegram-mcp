@@ -60,7 +60,7 @@ class Registry:
         if str(actor) != state.principal_id:
             raise PermissionError("execution identity mismatch")
         await self.ensure_enabled(provider)
-        label = self.runtime.config.bindings.get(state.principal_id)
+        label = self.runtime.config.resolve_account(state.principal_id)
         if not self.runtime.adapter.has_account(label):
             raise PermissionError("bound Telegram account is not configured")
         try:
