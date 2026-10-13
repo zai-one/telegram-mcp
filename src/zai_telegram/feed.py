@@ -44,7 +44,17 @@ _CURSOR = re.compile(r"([a-z][a-z0-9_]{0,31})\.([0-9a-f]{8})\.([0-9]{1,12})")
 
 
 PERSIST_TTL_SECONDS = 86400
-_ID_FIELDS = ("kind", "chat_id", "message_id", "message_ids", "sender_id", "date", "outgoing", "has_media")
+_ID_FIELDS = (
+    "kind",
+    "chat_id",
+    "message_id",
+    "message_ids",
+    "sender_id",
+    "date",
+    "outgoing",
+    "has_media",
+    "backfilled",
+)
 
 
 class FeedStore:
@@ -112,17 +122,27 @@ class AccountFeed:
         self.persist = persist
         self.boot_seq = 0
         self.downtime: dict[str, Any] | None = None
+        self.window: tuple[float, float] | None = None
         if persist is not None:
             loaded = persist.load(label)
             if loaded is not None:
                 self.epoch, self.seq, alive_at, events = loaded
                 self.ring.extend(events)
+                self.window = (alive_at, time.time())
                 self.downtime = {
                     "from": datetime.fromtimestamp(alive_at, UTC).isoformat(),
                     "to": datetime.now(UTC).isoformat(),
                 }
             self.boot_seq = self.seq
             persist.save(label, self.epoch, None, self.seq)
+        self.touched = time.monotonic()
+
+    def touch(self) -> None:
+        """Keep ``alive_at`` fresh on quiet accounts (bounds the next downtime window)."""
+        if self.persist is not None and time.monotonic() - self.touched > 60:
+            self.touched = time.monotonic()
+            with contextlib.suppress(Exception):
+                self.persist.save(self.label, self.epoch, None, self.seq)
 
     def cursor(self, seq: int | None = None) -> str:
         return f"{self.label}.{self.epoch}.{self.seq if seq is None else seq}"
@@ -211,6 +231,13 @@ class EventFeed:
         ping = getattr(client, "get_me", None)
         if callable(ping):
             await ping(input_peer=True)
+        if feed.window is not None and _env_on("TELEGRAM_FEED_BACKFILL"):
+            try:
+                count, complete = await asyncio.wait_for(backfill(feed, client), BACKFILL_SECONDS)
+            except Exception:  # noqa: BLE001 - backfill is best effort; the window stays reported
+                count, complete = 0, False
+            if feed.downtime is not None:
+                feed.downtime.update({"backfilled_new": count, "backfill_complete": complete})
         return feed
 
     @staticmethod
@@ -248,6 +275,53 @@ class EventFeed:
         return out, last, False
 
 
+BACKFILL_SECONDS = 20
+BACKFILL_DIALOGS = 100
+BACKFILL_PER_CHAT = 50
+BACKFILL_TOTAL = 500
+
+
+def _env_on(name: str) -> bool:
+    return os.environ.get(name, "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+async def backfill(feed: AccountFeed, client: Any) -> tuple[int, bool]:
+    """Re-read messages sent during the downtime window as ``new`` events.
+
+    Dialogs are scanned newest first (pinned ones are always checked) and each
+    chat is read backwards from the restart time to the window start. Edits and
+    deletions during the downtime cannot be recovered. Bounded: 100 dialogs,
+    50 messages per chat, 500 in total.
+    """
+    start, end = feed.window or (0.0, 0.0)
+    found: list[Any] = []
+    complete = True
+    async for dialog in client.iter_dialogs(limit=BACKFILL_DIALOGS):
+        date = getattr(dialog, "date", None)
+        stamp = date.timestamp() if isinstance(date, datetime) else 0.0
+        if stamp < start:
+            if getattr(dialog, "pinned", False):
+                continue
+            break
+        per_chat = 0
+        async for message in client.iter_messages(
+            dialog.entity, limit=BACKFILL_PER_CHAT, offset_date=datetime.fromtimestamp(end, UTC)
+        ):
+            when = getattr(message, "date", None)
+            if not isinstance(when, datetime) or when.timestamp() < start:
+                break
+            found.append(message)
+            per_chat += 1
+        if per_chat >= BACKFILL_PER_CHAT or len(found) >= BACKFILL_TOTAL:
+            complete = False
+        if len(found) >= BACKFILL_TOTAL:
+            break
+    found.sort(key=lambda m: (m.date, getattr(m, "id", 0)))
+    for message in found[:BACKFILL_TOTAL]:
+        feed.push({**_message_record("new", message), "backfilled": True})
+    return min(len(found), BACKFILL_TOTAL), complete
+
+
 def parse_cursor(cursor: Any) -> tuple[str, str, int] | None:
     if cursor is None or cursor == "":
         return None
@@ -258,9 +332,7 @@ def parse_cursor(cursor: Any) -> tuple[str, str, int] | None:
 
 
 def register_feed(server: Any, runtime: Any, surface: Any) -> None:
-    persist = None
-    if os.environ.get("TELEGRAM_FEED_PERSIST", "1").strip().lower() not in {"0", "false", "no", "off"}:
-        persist = FeedStore(runtime.store)
+    persist = FeedStore(runtime.store) if _env_on("TELEGRAM_FEED_PERSIST") else None
     registry = EventFeed(persist)
     runtime.event_feed = registry
 
@@ -295,6 +367,7 @@ def register_feed(server: Any, runtime: Any, surface: Any) -> None:
             raise PermissionError("bound account required")
         await runtime.registry.ensure_enabled("telegram")
         feed = await registry.feed_for(runtime.adapter, label)
+        feed.touch()
         if parsed is not None and parsed[0] != label:
             raise ValueError("cursor belongs to another account; pass the matching account")
         if parsed is None:

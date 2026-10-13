@@ -175,7 +175,7 @@ async def test_restart_keeps_cursor_and_ids_only_events_with_bounded_gap_window(
         got = (await client.call_tool(POLL, {"cursor": cursor})).data
         assert [e["message_id"] for e in got["events"]] == [1, 2]
         assert got["events"][0]["text_unavailable"] and got["events"][1]["text"] == "after"
-        assert got["gap"] and set(got["gap_window"]) == {"from", "to"}
+        assert got["gap"] and {"from", "to"} <= set(got["gap_window"])
         fresh = (await client.call_tool(POLL, {"cursor": got["next_cursor"]})).data
         assert not fresh["gap"] and "gap_window" not in fresh
     with StateStore(config).connect() as db:
@@ -193,3 +193,40 @@ async def test_persistence_can_be_disabled(config, monkeypatch):
         await client.call_tool(POLL, {})
         got = (await client.call_tool(POLL, {"cursor": cursor})).data
         assert got["gap"] and "gap_window" not in got
+
+
+async def test_downtime_backfill_adds_missed_messages_as_new_events(config):
+    from datetime import UTC, datetime, timedelta
+
+    adapter = FeedAdapter()
+    async with Client(server(config, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+
+    missed_at = datetime.now(UTC)
+
+    class BackfillClient(FakeClient):
+        async def iter_dialogs(self, limit):
+            yield SimpleNamespace(date=missed_at, pinned=False, entity="chat-101")
+            yield SimpleNamespace(date=missed_at - timedelta(days=3), pinned=False, entity="old")
+
+        async def iter_messages(self, entity, limit, offset_date):
+            assert entity == "chat-101"
+            yield SimpleNamespace(
+                chat_id=101, id=7, sender_id=5, message="missed", out=False, media=None, date=missed_at
+            )
+            yield SimpleNamespace(
+                chat_id=101,
+                id=6,
+                sender_id=5,
+                message="older",
+                out=False,
+                media=None,
+                date=missed_at - timedelta(days=2),
+            )
+
+    adapter.clients["default"] = BackfillClient()
+    async with Client(server(config, adapter)) as client:
+        await client.call_tool(POLL, {})
+        got = (await client.call_tool(POLL, {"cursor": cursor})).data
+    assert [(e["message_id"], e.get("backfilled")) for e in got["events"]] == [(7, True)]
+    assert got["gap_window"]["backfilled_new"] == 1 and got["gap_window"]["backfill_complete"]

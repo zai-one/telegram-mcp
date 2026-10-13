@@ -26,9 +26,11 @@ Adding an account in chat (opt-in toolset `account_admin`, local stdio server on
 - `telegram_add_account(label="work", action="start")` returns a QR code. The user scans it in a Telegram app
   where that account is signed in: Settings > Devices > Link Desktop Device.
 - Then `telegram_add_account(label="work", action="status")` (waits ~25 s; repeat while `waiting`).
-  `added` with `restart_required=false` -> use `account="work"` now (multi-account server, hot-activated);
+  `added` with `restart_required=false` -> use `account="work"` now (hot-activated, no restart);
   otherwise restart the MCP server first. `password_required` -> 2FA is on: the user finishes in a terminal
   with `zai-telegram-mcp-setup --add-account work --directory <setup dir> --qr`. Never ask for codes or passwords in chat.
+- Accounts added in a terminal while the server runs are picked up on the next call (new session + bindings);
+  the client is told its tool list changed and every tool gains `account`. Other secret changes need a restart.
 - The session is written to the private secret file and never shown; existing labels are never overwritten.
 
 Live feed of new/edited/deleted messages: `telegram_poll_events` (guide events).

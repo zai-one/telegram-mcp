@@ -9,6 +9,10 @@
 - Hot activation: an account added in chat joins the loaded runtime without restart when the server is multi-account (only a pure addition of `TELEGRAM_SESSION_STRING_<LABEL>` is accepted; any other secret change still needs a restart). Fixes the running server refusing calls after the secret file gained a new session.
 - Event feed survives restarts: epoch, sequence and event ids (never text) persist for 24 h in the state DB; old cursors stay valid and only the downtime is reported as `gap_window`. `TELEGRAM_FEED_PERSIST=0` disables.
 - Vendor backports from chigwell/telegram-mcp after v3.2.0 (`vendor/patches/zai-backports-2026-10.patch`, recorded in the manifest): serialized reconnects per client (2980601), no interactive `start()` on reconnect plus 30 s reconnect timeout (dd71a12), `list_messages` search starting at `to_date` (312cd00), custom `custom:<id>` and empty reactions (7fc6b4a).
+- Live reload: the server watches its secret and bindings files; a pure session addition is hot-added, new grants apply on the next call, the redaction set refreshes, and when the server becomes multi-account every tool gains `account` and `telegram_list_accounts` appears (MCP `tools/list_changed`). `account_admin` exposes `account` from the start. Invalid bindings keep the previous grants.
+- Event feed: downtime backfill (messages sent while the server was down become `new` events with `backfilled=true`, bounded 100 dialogs / 500 messages, `TELEGRAM_FEED_BACKFILL=0`); quiet accounts keep `alive_at` fresh.
+- Vendor backport d5ddc8c: `get_participants` paginates without the non-existent Telethon `offset` argument (every call failed before).
+- Critic fixes: newly saved sessions are redacted even when activation fails; abandoned QR logins are disconnected after 10 min; in-chat grants work without a bindings file path (reported as `binding_saved=false`).
 - Router: same lines, now also routing live feed and add-account; default/all always-loaded context stays at or below 0.5.0 (enforced by `scripts/token_budget.py`). Router eval: 34 cases, optional upstream-tool check.
 
 ## 0.5.0
