@@ -56,7 +56,7 @@
     },
     "telegram_mcp/tools/groups.py": {
       "patched_upstream_sha256": "c7d23abb6074ad625f934d68d6ea2761cdde3d4edb309cd6236ebd019dda6d02",
-      "packaged_sha256": "c6b163ffbb496116323ed14314159da65c6bb4d5761da1b7780fc800dd495fc8"
+      "packaged_sha256": "fbe4ef304d008b45fd98b9df69be27521508a71089e990c22885f17d3029f786"
     },
     "telegram_mcp/tools/media.py": {
       "patched_upstream_sha256": "30c8b17a2c44d1b1120278d2af358bdc69860e894d4a9a8ca067dad2af230b27",
@@ -82,8 +82,9 @@
       "2980601",
       "dd71a12",
       "312cd00",
-      "7fc6b4a"
+      "7fc6b4a",
+      "d5ddc8c"
     ],
-    "sha256": "81f34a90a854340d7096fe63fd55e59918ebac6ef4c65a6aa26b9e3979952274"
+    "sha256": "59091afd4b437812deaa50186e55888941214bfe481789ea1b95b716fdaf6c63"
   }
 }

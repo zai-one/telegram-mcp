@@ -166,4 +166,7 @@ def test_upstream_backports_are_applied_and_recorded():
     assert 'params["offset_date"] = to_date_obj + timedelta(microseconds=1)' in messages
     assert "ReactionCustomEmoji(document_id=int(document_id))" in messages
     manifest = json.loads(root.joinpath("manifest.json").read_text(encoding="utf-8"))
-    assert manifest["backports"]["upstream_commits"] == ["2980601", "dd71a12", "312cd00", "7fc6b4a"]
+    expected = ["2980601", "dd71a12", "312cd00", "7fc6b4a", "d5ddc8c"]
+    assert manifest["backports"]["upstream_commits"] == expected
+    groups = root.joinpath("telegram_mcp/tools/groups.py").read_text(encoding="utf-8")
+    assert "limit=skip + page_size + 1" in groups and "offset=offset" not in groups

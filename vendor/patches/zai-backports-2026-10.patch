@@ -143,3 +143,47 @@
  
          reactions_data = []
          for reaction in result.reactions:
+--- a/telegram_mcp/tools/groups.py
++++ b/telegram_mcp/tools/groups.py
+@@ -237,17 +237,25 @@
+     """
+     try:
+         # Enforce safety limit per issue #14
+-        if page_size > 1000:
+-            return "Error: page_size cannot exceed 1000 participants per request."
++        if page < 1 or not 1 <= page_size <= 1000:
++            return "Error: page must be >= 1 and page_size between 1 and 1000."
+ 
+         cl = get_client(account)
+         await ensure_connected(cl)
+ 
+-        # Use iter_participants with offset to fetch only the needed slice,
+-        # avoiding O(N) fetching on later pages.
+-        offset = (page - 1) * page_size
++        # zai backport (upstream d5ddc8c): Telethon's iter_participants has no
++        # ``offset``; skip the prefix and stop once one extra participant proves
++        # a next page (basic groups may ignore ``limit``).
++        skip = (page - 1) * page_size
+         participants = []
+-        async for participant in cl.iter_participants(chat_id, limit=page_size, offset=offset):
++        has_more = False
++        async for participant in cl.iter_participants(chat_id, limit=skip + page_size + 1):
++            if skip:
++                skip -= 1
++                continue
++            if len(participants) == page_size:
++                has_more = True
++                break
+             participants.append(participant)
+ 
+         if not participants:
+@@ -267,8 +275,7 @@
+             records.append(rec)
+         result = format_tool_result(records)
+ 
+-        # Append pagination metadata; has_more indicates whether a next page likely exists
+-        has_more = len(participants) == page_size
++        # Only an actual extra participant establishes another page.
+         result += f"\n\nPage {page} (showing {len(participants)} participants)"
+         if has_more:
+             result += f" — more results available on page {page + 1}"
