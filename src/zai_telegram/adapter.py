@@ -18,6 +18,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.tools import Tool
 
 from zai_telegram.media_policy import FILE_FIELDS, MediaPolicy, download, exact_chat, verify_receipt
+from zai_telegram.native import NATIVE_READS, NATIVE_WRITES
 from zai_telegram.secrets import read_private_secret_env, read_secret_env
 from zai_telegram.transport import ProviderError, ProviderTimeoutError, ProviderTransportError
 from zai_telegram.vendor_integrity import assert_pinned_vendor
@@ -89,7 +90,9 @@ TELEGRAM_READ_ALLOWLIST = frozenset(
         "get_bot_info",
         "get_user_photos",
         "get_user_status",
+        "export_contacts",
     }
+    | set(NATIVE_READS)
 )
 
 # Frozen write allowlist: upstream tool name -> risk tier. Derived once from the
@@ -172,6 +175,11 @@ TELEGRAM_WRITE_ALLOWLIST: dict[str, str] = {
     "remove_chat_from_folder": "low",
     "delete_folder": "low",
     "reorder_folders": "low",
+    # invite links (create/export a link; reviewed as writes, not reads)
+    "get_invite_link": "medium",
+    "export_chat_invite": "medium",
+    # native parity tools (zai_telegram.native), same gates as vendor writes
+    **{name: spec[1] for name, spec in NATIVE_WRITES.items()},
 }
 
 # Typed convenience write tools exposed on the platform surface -> upstream.
@@ -473,6 +481,8 @@ class TelegramAdapter:
         values = {key: value for key, value in values.items() if value is not None}
         try:
             server = await self._embedded_server()
+            if upstream_tool in NATIVE_WRITES and self._runtime is not None:
+                return await self._native(NATIVE_WRITES[upstream_tool][0], values)
             if upstream_tool == "download_media":
                 return await download(self.media_policy, self._runtime, values)
             if upstream_tool in FILE_FIELDS and "chat_id" in values and self._runtime is not None:
@@ -601,6 +611,8 @@ class TelegramAdapter:
         upstream, values = self._upstream_call(platform_tool, arguments)
         try:
             server = await self._embedded_server()
+            if upstream in NATIVE_READS and self._runtime is not None:
+                return await self._native(NATIVE_READS[upstream], values)
             async with Client(FastMCPTransport(server), timeout=TELEGRAM_UPSTREAM_TIMEOUT_SECONDS) as client:
                 result = await client.call_tool(upstream, values)
         except ProviderError:
@@ -621,6 +633,17 @@ class TelegramAdapter:
         ):
             raise ProviderError("embedded Telegram tool returned an error")
         return value
+
+    async def _native(self, handler, values: dict[str, Any]) -> Any:
+        client = self._runtime.get_client(values["account"])
+        args = {key: value for key, value in values.items() if key != "account"}
+        return await asyncio.wait_for(handler(client, args), TELEGRAM_UPSTREAM_TIMEOUT_SECONDS)
+
+    def event_client(self, account: str) -> Any:
+        """Bound Telethon client for the event feed (loaded runtime only)."""
+        if self._runtime is None or not self.has_account(account):
+            raise ProviderError("Telegram account is not configured")
+        return self._runtime.get_client(account)
 
     async def close(self) -> None:
         if self._runtime is None:
