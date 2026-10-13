@@ -1,27 +1,24 @@
 # Changelog
 
-## Unreleased
-
-- `telegram_wait_for_settled_message` (toolset `events`): poll-based debounce — wait until a watched chat goes quiet for `settle_seconds` (1–30, default 6) after new messages, or return `status=partial` with pending messages / `status=timeout` if none; same ACL and paced reads as `telegram_wait_for_new_message` (closes the gap vs vendor event-driven `wait_for_settled_message`).
-- Opt-in toolset `advanced_read`: generic `telegram_read(tool, arguments)` over 43 reviewed read-only Telethon tools (participants, pinned, reactions, read-by, message links/context, folders, drafts, contacts, profiles, admin log...). Never part of `all`; with a chat allowlist only calls naming a permitted chat/user pass. Guide `telegram://guide/advanced-read`.
-- Router `instructions` rewritten as intent → first tool → skill/guide, with a fallback to `telegram://playbook`; playbook lists all routes, skills and guides. New guide `accounts`, new skill `telegram-watch-replies`.
-- Router eval (`tests/eval/router_cases.json`, 26 colloquial EN/RU requests) checks router → skill/guide → first tool, and fails if any tool, skill or guide is unreachable from the router. Token budget now also caps the always-loaded context (instructions + tools/list + skill frontmatters, ≈3.9k tokens default).
-- One-minute install: `uvx --from git+https://github.com/zai-one/telegram-mcp zai-telegram-mcp-setup`; the wizard writes a `uvx` client entry when run from uvx (`ZAI_TELEGRAM_UVX_FROM` overrides the source).
-
-- Multi-account with labels: list-valued bindings (`{"actor": ["default", "work"]}`, first = default) add an optional per-call `account` argument to every tool and `telegram_list_accounts`; rate limits, poll cursors and outbox idempotency are per account, and `telegram_outbox_status` records carry `account_label`. String bindings keep the previous schema byte-for-byte.
-- `telegram_wait_for_new_message` (toolset `events`): bounded long-poll (1–55 s) over 1–10 chats with a local baseline, paced reads and `status=timeout`; respects the chat ACL; no read receipts.
+## 0.5.0
 
 - License: LicenseRef-ZAI-ONE 2.0 (source-available). Free install and use for yourself and your organisation, including commercial work; issues and pull requests welcome; copying code into other projects, redistribution, embedding and competing hosted services need written permission. Earlier releases keep their LicenseRef-ZAI-ONE 1.0 terms (see NOTICE). README first screen: one-line scope, why this MCP, maintenance and update check.
-
-- Compact replies: `TELEGRAM_RESPONSE_DETAIL=summary` (+ `TELEGRAM_MAX_TEXT_CHARS`) drops empty fields and truncates long texts with explicit markers; default `full` is unchanged.
-- New read tools (toolset `chat_insights`): `telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats` (vendor patch over Telethon `get_stats` → `stats.getBroadcastStats` / `stats.getMegagroupStats`). Skill `telegram-channel-report`.
-
 - Toolsets (`TELEGRAM_TOOLSETS`, `TELEGRAM_TOOLS`, `TELEGRAM_DISABLED_TOOLS`, `--toolsets`), read-only mode (`TELEGRAM_READ_ONLY`, `--read-only`) and write categories for `telegram_write`. Unset = previous surface.
-- Per-chat ACL: `TELEGRAM_ALLOWED_CHATS` (deny-by-default when set) and `TELEGRAM_DENIED_CHATS`; listings are filtered. Under an allowlist the generic `telegram_write` fails closed: a call must name an allowed chat (or, without a chat, an allowed `user_id`/`channel`), and account-wide or chat-creating writes (join by link, create group/channel, profile, privacy, folders, contacts import) are denied.
-- Compact tool descriptions and titles; router `instructions`; error envelopes gain `hint` and `docs`; new codes `chat_access_denied`, `tool_disabled`.
+- Per-chat ACL: `TELEGRAM_ALLOWED_CHATS` (deny-by-default when set) and `TELEGRAM_DENIED_CHATS`; listings are filtered.
+- Compact tool descriptions and titles; router `instructions` as intent → first tool → skill/guide, with a fallback to `telegram://playbook`; error envelopes gain `hint` and `docs`; new codes `chat_access_denied`, `tool_disabled`.
 - Resources `telegram://toolsets`, `telegram://playbook`, `telegram://guide/{topic}`; prompts `inbox_digest`, `publish_post`, `chat_research`.
-- Self-contained skills (`skills/`), Claude Code plugin + marketplace (`.claude-plugin/`), `server.json`, `scripts/token_budget.py` (CI via tests).
+- Self-contained skills (`skills/`, including `telegram-channel-report` and `telegram-watch-replies`), Claude Code plugin + marketplace (`.claude-plugin/`), `server.json`, `scripts/token_budget.py` (CI via tests).
+- Compact replies: `TELEGRAM_RESPONSE_DETAIL=summary` (+ `TELEGRAM_MAX_TEXT_CHARS`) drops empty fields and truncates long texts with explicit markers; default `full` is unchanged.
+- New read tools (toolset `chat_insights`): `telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats` (vendor patch over Telethon `get_stats` → `stats.getBroadcastStats` / `stats.getMegagroupStats`).
+- Opt-in toolset `advanced_read`: generic `telegram_read(tool, arguments)` over 43 reviewed read-only Telethon tools (participants, pinned, reactions, read-by, message links/context, folders, drafts, contacts, profiles, admin log...). Never part of `all`. Guide `telegram://guide/advanced-read`.
+- Multi-account with labels: list-valued bindings (`{"actor": ["default", "work"]}`, first = default) add an optional per-call `account` argument to every tool and `telegram_list_accounts`; rate limits, poll cursors and outbox idempotency are per account, and `telegram_outbox_status` records carry `account_label`. String bindings keep the previous schema byte-for-byte.
+- `telegram_wait_for_new_message` (toolset `events`): bounded long-poll (1–55 s) over 1–10 chats with a local baseline, paced reads and `status=timeout`; respects the chat ACL; no read receipts.
+- `telegram_wait_for_settled_message` (toolset `events`): poll-based debounce — waits until watched chats go quiet for `settle_seconds` (1–30, default 6) after new messages; `status=settled`, `partial` with pending messages, or `timeout`. Same ACL and read pacing as `telegram_wait_for_new_message`.
+- One-minute install: `uvx --from git+https://github.com/zai-one/telegram-mcp@v0.5.0 zai-telegram-mcp-setup`; the wizard writes a `uvx` client entry pinned to the installed release tag when run from uvx (`ZAI_TELEGRAM_UVX_FROM` overrides the source). The Claude Code plugin and README snippets pin the same tag.
+- Router eval (`tests/eval/router_cases.json`, 26 colloquial EN/RU requests) checks router → skill/guide → first tool, and fails if any tool, skill or guide is unreachable from the router. Token budget now also caps the always-loaded context (instructions + tools/list + skill frontmatters, ≈3.9k tokens default).
 - Vendor fixes: GIF search uses the @gif inline bot (Telethon has no `messages.SearchGifsRequest`); `import_contacts` uses `types.InputPhoneContact`.
+- Security: under `TELEGRAM_ALLOWED_CHATS` the generic `telegram_write` fails closed — a call must name an allowed chat (or, without a chat, an allowed `user_id`/`channel`), and account-wide or chat-creating writes (join by link, create group/channel, profile, privacy, folders, contacts import) are denied. Under any chat ACL `telegram_read` needs a named chat/user: account-wide reads (contacts, drafts, global search, folders) and chat-listing reads (`get_common_chats`, `get_contact_chats`) are denied.
+- Fix: `telegram_wait_for_settled_message` no longer acknowledges already-watched chats when a new chat joins the wait, so their unread messages are returned instead of dropped; its settle loop is paced like `telegram_wait_for_new_message` (~24 reads/min).
 
 ## 0.4.0
 
