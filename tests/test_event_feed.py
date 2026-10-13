@@ -159,3 +159,37 @@ async def test_gap_after_restart_or_overflow_and_bad_cursor(config, monkeypatch)
             await adapter.clients["default"].emit("new", chat_id=101, id=i)
         got = (await client.call_tool(POLL, {"cursor": cursor})).data
         assert got["gap"] is True and [e["message_id"] for e in got["events"]] == [3, 4]
+
+
+async def test_restart_keeps_cursor_and_ids_only_events_with_bounded_gap_window(config):
+    from zai_telegram.state import StateStore
+
+    adapter = FeedAdapter()
+    async with Client(server(config, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+        await adapter.clients["default"].emit("new", chat_id=101, id=1, text="synthetic-secret-body")
+    adapter.clients["default"] = FakeClient()  # restart: new process, new handlers
+    async with Client(server(config, adapter)) as client:
+        await client.call_tool(POLL, {})
+        await adapter.clients["default"].emit("new", chat_id=101, id=2, text="after")
+        got = (await client.call_tool(POLL, {"cursor": cursor})).data
+        assert [e["message_id"] for e in got["events"]] == [1, 2]
+        assert got["events"][0]["text_unavailable"] and got["events"][1]["text"] == "after"
+        assert got["gap"] and set(got["gap_window"]) == {"from", "to"}
+        fresh = (await client.call_tool(POLL, {"cursor": got["next_cursor"]})).data
+        assert not fresh["gap"] and "gap_window" not in fresh
+    with StateStore(config).connect() as db:
+        stored = str([tuple(r) for r in db.execute("SELECT * FROM telegram_feed_events")])
+    assert "synthetic-secret-body" not in stored and "after" not in stored
+
+
+async def test_persistence_can_be_disabled(config, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_FEED_PERSIST", "0")
+    adapter = FeedAdapter()
+    async with Client(server(config, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+    adapter.clients["default"] = FakeClient()
+    async with Client(server(config, adapter)) as client:
+        await client.call_tool(POLL, {})
+        got = (await client.call_tool(POLL, {"cursor": cursor})).data
+        assert got["gap"] and "gap_window" not in got
