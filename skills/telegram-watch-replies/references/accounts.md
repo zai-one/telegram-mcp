@@ -20,4 +20,14 @@ Waiting / watching
   per account, so another account does not find the batch.
 - One-shot check without waiting: `telegram_poll_messages` (first call only sets a baseline).
 - Numeric chat ids only (get them with `telegram_list_chats`). 1-10 chats per call. Edits and deletions
-  are not tracked. Nothing is marked read.
+  are not tracked here (use `telegram_poll_events`). Nothing is marked read.
+
+Adding an account in chat (opt-in toolset `account_admin`, local stdio server only)
+- `telegram_add_account(label="work", action="start")` returns a QR code. The user scans it in a Telegram app
+  where that account is signed in: Settings > Devices > Link Desktop Device.
+- Then `telegram_add_account(label="work", action="status")` (waits ~25 s; repeat while `waiting`).
+  `added` -> restart the MCP server, then `account="work"` works. `password_required` -> 2FA is on: the user
+  finishes in a terminal with `zai-telegram-mcp-setup`. Never ask for login codes or passwords in chat.
+- The session is written to the private secret file and never shown; existing labels are never overwritten.
+
+Live feed of new/edited/deleted messages: `telegram_poll_events` (guide events).
