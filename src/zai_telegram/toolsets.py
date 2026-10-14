@@ -297,6 +297,7 @@ class Surface:
                 "TELEGRAM_TOOLS": "extra tool names",
                 "TELEGRAM_DISABLED_TOOLS": "tool names to hide",
                 "TELEGRAM_READ_ONLY": "1 hides every write",
+                "TELEGRAM_TOOL_LOADING": "eager (default) | lazy: core tools + telegram_enable_toolsets",
                 "TELEGRAM_ALLOWED_CHATS": "ids/@usernames; set = deny others",
                 "TELEGRAM_DENIED_CHATS": "ids/@usernames always denied",
                 "TELEGRAM_RESPONSE_DETAIL": "full (default) | summary: drop empty fields, truncate long texts",
@@ -509,3 +510,29 @@ def compact(value: Any, max_text_chars: int) -> Any:
             out[key] = compact(item, max_text_chars)
         return out
     return value
+
+
+@dataclass(frozen=True)
+class LazyProfile:
+    """What lazy_loading.install needs: toolsets, one-line notes and the start core."""
+
+    service: str = "telegram"
+    env: str = "TELEGRAM"
+    lazy_core: tuple[str, ...] = (
+        *TOOLSETS["core"]["tools"],
+        "telegram_get_conversation_context",
+        "telegram_search_messages",
+        "telegram_send_message",
+    )
+
+    @property
+    def toolsets(self) -> dict[str, tuple[str, ...]]:
+        return {name: tuple(spec["tools"]) for name, spec in TOOLSETS.items()}
+
+    @property
+    def toolset_notes(self) -> dict[str, str]:
+        return {name: spec["description"] for name, spec in TOOLSETS.items()}
+
+
+LAZY_PROFILE = LazyProfile()
+

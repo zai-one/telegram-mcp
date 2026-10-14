@@ -28,6 +28,7 @@ Try asking your assistant:
 
 ## Why this MCP
 
+- Optional lazy tool loading: `TELEGRAM_TOOL_LOADING=lazy` starts with a small core plus `telegram_enable_toolsets` and adds toolsets on demand (`tools/list_changed`). Startup cost (tools/list + instructions, ≈chars/4): eager ≈3558 tokens, lazy ≈1813 tokens (−49%). Default `eager` is unchanged; if your client ignores `tools/list_changed`, keep `eager` or reconnect after enabling.
 - Built on the [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp) v3.2.0 tool set (Apache-2.0, vendored with provenance) and adds safety on top.
 - Starts read-only; toolsets, per-chat allow/deny ACL, explicit-confirmation sends with idempotency keys and an outbox.
 - Message text is treated as untrusted; reading never marks messages as read; structured errors with `retry_after_seconds` for flood waits.
