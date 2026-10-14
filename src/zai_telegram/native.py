@@ -3,7 +3,8 @@
 Parity with newer upstream releases without re-pinning the vendor: each entry is a
 small, reviewed Telethon call reachable only through the existing generic gates -
 reads via ``telegram_read`` (TELEGRAM_READ_ALLOWLIST), writes via ``telegram_write``
-(TELEGRAM_WRITE_ALLOWLIST + write categories + idempotency ledger + chat ACL).
+(TELEGRAM_WRITE_ALLOWLIST + write categories + idempotency ledger + chat ACL/allowlist).
+Every handler runs after the runtime's ``ensure_connected`` liveness check.
 Results are plain JSON; message text is marked untrusted.
 """
 
@@ -179,7 +180,11 @@ async def vote_poll(client: Any, args: dict[str, Any]) -> dict[str, Any]:
     if poll is None:
         raise ProviderError("Telegram message is not a poll")
     answers = list(poll.answers)
+    if getattr(poll, "closed", False):
+        raise ProviderError("Telegram poll is closed")
     picked = [_int(i, "option_index", 0, len(answers) - 1) for i in options]
+    if len(set(picked)) != len(picked):
+        raise ProviderError("Telegram option_indexes must not repeat")
     if len(picked) > 1 and not getattr(poll, "multiple_choice", False):
         raise ProviderError("Telegram poll allows a single answer")
     await client(
@@ -191,8 +196,15 @@ async def vote_poll(client: Any, args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def remove_user(client: Any, args: dict[str, Any]) -> dict[str, Any]:
+    target = _chat(args.get("user_id"))
+    if isinstance(target, str) and target.lstrip("@").casefold() in {"me", "self"}:
+        # kick_participant(chat, "me") leaves the chat; that is not a removal of a member.
+        raise ProviderError("Telegram remove_user cannot remove the account itself")
     entity = await client.get_entity(_chat(args.get("chat_id")))
-    user = await client.get_entity(_chat(args.get("user_id")))
+    user = await client.get_entity(target)
+    me = await client.get_me(input_peer=True)
+    if getattr(user, "id", None) is not None and getattr(user, "id", None) == getattr(me, "user_id", None):
+        raise ProviderError("Telegram remove_user cannot remove the account itself")
     await client.kick_participant(entity, user)
     return {"status": "removed", "chat_id": getattr(entity, "id", None), "user_id": getattr(user, "id", None)}
 

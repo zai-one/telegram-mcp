@@ -62,7 +62,7 @@ TOOLSETS: dict[str, dict[str, Any]] = {
         ),
     },
     "advanced_read": {
-        "description": "Opt-in: generic telegram_read over ~40 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",
+        "description": "Opt-in: generic telegram_read over ~50 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",
         "tools": ("telegram_read",),
     },
     "event_feed": {

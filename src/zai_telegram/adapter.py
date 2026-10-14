@@ -709,7 +709,16 @@ class TelegramAdapter:
     async def _native(self, handler, values: dict[str, Any]) -> Any:
         client = self._runtime.get_client(values["account"])
         args = {key: value for key, value in values.items() if key != "account"}
-        return await asyncio.wait_for(handler(client, args), TELEGRAM_UPSTREAM_TIMEOUT_SECONDS)
+
+        async def run() -> Any:
+            # Same liveness check the vendored tools do before every call: a dropped
+            # connection is re-established (bounded, never interactive) instead of failing.
+            ensure = getattr(self._runtime, "ensure_connected", None)
+            if ensure is not None:
+                await ensure(client)
+            return await handler(client, args)
+
+        return await asyncio.wait_for(run(), TELEGRAM_UPSTREAM_TIMEOUT_SECONDS)
 
     def event_client(self, account: str) -> Any:
         """Bound Telethon client for the event feed (loaded runtime only)."""

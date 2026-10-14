@@ -108,3 +108,52 @@ async def test_adapter_dispatches_native_without_upstream_server():
         native.vote_poll, {"account": "default", "chat_id": "1", "message_id": 2, "option_indexes": [0]}
     )
     assert result["status"] == "voted"
+
+
+async def test_native_calls_run_the_runtime_liveness_check_first():
+    adapter = TelegramAdapter.__new__(TelegramAdapter)
+    client, order = PollClient(), []
+
+    async def ensure(cl):
+        order.append(("ensure", cl))
+
+    adapter._runtime = SimpleNamespace(get_client=lambda label: client, ensure_connected=ensure)
+    await adapter._native(
+        native.vote_poll, {"account": "default", "chat_id": "1", "message_id": 2, "option_indexes": [0]}
+    )
+    assert order == [("ensure", client)] and len(client.sent) == 1
+
+
+async def test_vote_poll_rejects_repeated_indexes_and_closed_polls():
+    client = PollClient(multiple=True)
+    with pytest.raises(ProviderError, match="repeat"):
+        await native.vote_poll(client, {"chat_id": "1", "message_id": 5, "option_indexes": [0, 0]})
+    client.poll.closed = True
+    with pytest.raises(ProviderError, match="closed"):
+        await native.vote_poll(client, {"chat_id": "1", "message_id": 5, "option_indexes": [0]})
+    assert client.sent == []
+
+
+class KickClient:
+    def __init__(self):
+        self.kicked = []
+
+    async def get_entity(self, value):
+        return SimpleNamespace(id=777 if value in {"me", 777} else int(value))
+
+    async def get_me(self, input_peer=False):
+        return SimpleNamespace(user_id=777)
+
+    async def kick_participant(self, entity, user):
+        self.kicked.append(user.id)
+
+
+@pytest.mark.parametrize("own", ["me", "@Me", "self", 777])
+async def test_remove_user_never_removes_the_account_itself(own):
+    # kick_participant(chat, "me") would make the account leave the chat.
+    client = KickClient()
+    with pytest.raises(ProviderError, match="itself"):
+        await native.remove_user(client, {"chat_id": "-100123", "user_id": own})
+    assert client.kicked == []
+    await native.remove_user(client, {"chat_id": "-100123", "user_id": "42"})
+    assert client.kicked == [42]
