@@ -276,3 +276,82 @@ def test_http_server_never_offers_add_account(config):
     )
     names = {tool.name for key, tool in server.local_provider._components.items() if key.startswith("tool:")}
     assert ADD not in names and "telegram_list_accounts" not in names
+
+
+async def test_write_switch_and_provider_switch_gate_add_account(config, monkeypatch):
+    """Regression: add_account is a write; it needs TELEGRAM_WRITE_ENABLED and an enabled provider."""
+    for settings in (replace(config, telegram_write_enabled=False), replace(config, enabled=False)):
+        server, clients = make_server(settings, monkeypatch)
+        async with Client(server) as client:
+            with pytest.raises(ToolError):
+                await client.call_tool(ADD, {"label": "work"})
+        assert clients == []  # no QR login was even started
+    # Switched off while the user scans: nothing is saved.
+    import zai_telegram.server as srv
+
+    server, clients = make_server(config, monkeypatch)
+    runtimes = []
+    register = srv.register_account_login
+    monkeypatch.setattr(srv, "register_account_login", lambda s, r: (runtimes.append(r), register(s, r)))
+    server = create_server(
+        config, transport="stdio", adapter=FixtureAdapter(), surface=build_surface("default,account_admin")
+    )
+    async with Client(server) as client:
+        await client.call_tool(ADD, {"label": "work"})
+        runtimes[0]._apply_config(replace(runtimes[0].config, telegram_write_enabled=False))
+        with pytest.raises(ToolError):
+            await client.call_tool(ADD, {"label": "work", "action": "status"})
+    assert "TELEGRAM_SESSION_STRING_WORK" not in read_secret_env(config.secret_path)
+    assert clients[0].disconnected
+
+
+def test_concurrent_adders_never_lose_a_session_or_grant(config, tmp_path, monkeypatch):
+    """Regression: two adders racing on the files must both land; one label is never stored twice."""
+    import threading
+    import time as time_module
+
+    bindings = tmp_path / "bindings.json"
+    bindings.write_text(json.dumps({"local-operator": "default"}))
+    bindings.chmod(0o600)
+    original = account_login._atomic_write
+
+    def slow_write(path, text):
+        time_module.sleep(0.2)  # widen the read-modify-replace window
+        original(path, text)
+
+    monkeypatch.setattr(account_login, "_atomic_write", slow_write)
+    errors = []
+
+    def add(label, session):
+        try:
+            account_login.save_account(config.secret_path, bindings, "local-operator", label, session)
+        except ValueError as exc:
+            errors.append(str(exc))
+
+    threads = [
+        threading.Thread(target=add, args=("work", "synthetic-work")),
+        threading.Thread(target=add, args=("home", "synthetic-home")),
+        threading.Thread(target=add, args=("work", "synthetic-work-2")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    secret = read_secret_env(config.secret_path)
+    assert secret["TELEGRAM_SESSION_STRING_HOME"] == "synthetic-home"
+    assert secret["TELEGRAM_SESSION_STRING_WORK"] in {"synthetic-work", "synthetic-work-2"}
+    assert config.secret_path.read_text().count("TELEGRAM_SESSION_STRING_WORK=") == 1
+    assert errors == ["account label already configured"]
+    assert sorted(json.loads(bindings.read_text())["local-operator"]) == ["default", "home", "work"]
+
+
+async def test_read_only_mode_drops_add_account_even_when_listed_explicitly(config, monkeypatch):
+    """Regression: TELEGRAM_READ_ONLY=1 + TELEGRAM_TOOLS=telegram_add_account exposed an account write."""
+    from zai_telegram.toolsets import surface_from_env
+
+    surface = surface_from_env({"TELEGRAM_READ_ONLY": "1", "TELEGRAM_TOOLS": ADD})
+    assert ADD not in surface.tools
+    assert ADD not in build_surface("default,account_admin", extra_tools=[ADD], read_only=True).tools
+    server = create_server(config, transport="stdio", adapter=FixtureAdapter(), surface=surface)
+    async with Client(server) as client:
+        assert ADD not in {t.name for t in await client.list_tools()}

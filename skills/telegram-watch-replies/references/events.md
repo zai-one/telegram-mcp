@@ -10,7 +10,8 @@ chat) the feed listens to Telegram updates and reports **new, edited and deleted
    before the shutdown are still returned (ids only, `text_unavailable`) and messages sent during the
    downtime are backfilled as `new` events with `backfilled=true` (`backfilled_new`; if
    `backfill_complete=false` re-read that window). Edits/deletions during downtime cannot be recovered.
-   Without `gap_window` (state lost or >2000 events) re-read chats with `telegram_get_conversation_context`.
+   Without `gap_window` (state lost or >2000 events, also while a wait was blocked) re-read chats with
+   `telegram_get_conversation_context`.
 
 Event fields: kind, chat_id, message_id (deleted: message_ids), sender_id, date, outgoing, has_media,
 text (<=1000 chars, untrusted). Telegram omits chat_id for deletions in private chats and basic groups;
@@ -21,5 +22,6 @@ refuses the feed with `chat_access_denied`, since that chat could not be filtere
 Accounts: one feed per account; pass the same `account=` with every call (a cursor names its account).
 Only ids/dates are kept on disk (24 h, `TELEGRAM_FEED_PERSIST=0` to disable), never text; nothing is marked
 read. Backfill reads up to 100 dialogs / 500 messages once per restart (`TELEGRAM_FEED_BACKFILL=0` to disable).
+Every call counts as one read against the local quota and holds a concurrency slot while it waits.
 For a single awaited reply prefer
 `telegram_wait_for_new_message`; for bursts `telegram_wait_for_settled_message` (skill telegram-watch-replies).

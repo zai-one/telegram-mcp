@@ -306,3 +306,77 @@ async def test_denylist_username_refuses_the_feed(config):
             await client.call_tool(POLL, {})
     async with Client(server(config, adapter, denied_chats=["-100777"])) as client:
         assert (await client.call_tool(POLL, {})).data["status"] == "started"
+
+
+async def test_poll_events_is_admitted_like_every_read(config):
+    """Regression: the feed bypassed cooldown and the concurrency ceiling (no admission at all)."""
+    from zai_telegram.state import StateStore
+
+    adapter = FeedAdapter()
+    opened = []
+    original = adapter.event_client
+    adapter.event_client = lambda account: (opened.append(account), original(account))[1]
+    StateStore(config).cooldown("local-operator", 60)
+    async with Client(server(config, adapter)) as client:
+        with pytest.raises(ToolError):
+            await client.call_tool(POLL, {})
+    assert opened == []  # no feed initialization (provider connect / backfill) during cooldown
+
+    settings = replace(config, state_path=config.state_path.with_name("other.sqlite"), max_concurrency=1)
+    adapter = FeedAdapter()
+    async with Client(server(settings, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+        waiting = asyncio.create_task(client.call_tool(POLL, {"cursor": cursor, "wait_seconds": 3}))
+        await asyncio.sleep(0.3)
+        with pytest.raises(ToolError):
+            await client.call_tool(POLL, {"cursor": cursor})  # the long poll holds the only lease
+        await adapter.clients["default"].emit("new", chat_id=101, id=1)
+        assert [e["message_id"] for e in (await waiting).data["events"]] == [1]
+
+
+async def test_overflow_during_long_poll_is_reported_as_gap(config, monkeypatch):
+    """Regression: events lost while a waiter slept were skipped with gap=false."""
+    import zai_telegram.feed as feed_module
+
+    monkeypatch.setattr(feed_module, "RING_SIZE", 2)
+    adapter = FeedAdapter()
+    fake = adapter.clients["default"]
+    async with Client(server(config, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+        waiting = asyncio.create_task(client.call_tool(POLL, {"cursor": cursor, "wait_seconds": 5}))
+        await asyncio.sleep(0.3)
+        for message_id in range(1, 5):  # no await yields to the waiter in between
+            await fake.emit("new", chat_id=101, id=message_id)
+        got = (await waiting).data
+    assert [e["message_id"] for e in got["events"]] == [3, 4] and got["gap"] is True
+
+
+async def test_backfill_reports_incomplete_when_the_dialog_bound_is_hit(monkeypatch):
+    """Regression: more changed dialogs than BACKFILL_DIALOGS still reported backfill_complete=true."""
+    from datetime import UTC, datetime, timedelta
+
+    import zai_telegram.feed as feed_module
+
+    monkeypatch.setattr(feed_module, "BACKFILL_DIALOGS", 3)
+    now = datetime.now(UTC)
+
+    class Many:
+        def __init__(self, dialogs):
+            self.dialogs = dialogs
+
+        async def iter_dialogs(self, limit):
+            for index in range(min(limit, self.dialogs)):
+                yield SimpleNamespace(date=now, pinned=False, entity=index)
+
+        async def iter_messages(self, entity, limit, offset_date):
+            yield SimpleNamespace(
+                chat_id=entity, id=1, sender_id=5, message="x", out=False, media=None, date=now
+            )
+
+    def fresh():
+        feed = feed_module.AccountFeed("default")
+        feed.window = ((now - timedelta(hours=1)).timestamp(), now.timestamp())
+        return feed
+
+    assert await feed_module.backfill(fresh(), Many(4)) == (3, False)
+    assert await feed_module.backfill(fresh(), Many(3)) == (3, True)

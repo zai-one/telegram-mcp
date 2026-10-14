@@ -274,3 +274,34 @@ async def test_edit_forum_topic_sends_stripped_title():
     client = TopicClient([])
     await native.edit_forum_topic(client, {"chat_id": -1001, "topic_id": 5, "title": "  News  "})
     assert client.sent[0].title == "News"
+
+
+async def test_export_unread_returns_unread_incoming_not_latest_history():
+    """Regression: unread_count is not a history depth; later outgoing messages displaced unread ones."""
+
+    def msg(message_id, out):
+        return SimpleNamespace(
+            id=message_id, chat_id=5, sender_id=1, message=f"m{message_id}", out=out, date=None
+        )
+
+    history = [msg(14, True), msg(13, True), msg(12, False), msg(11, False), msg(10, False)]  # newest first
+
+    class Client:
+        async def iter_dialogs(self, limit):
+            yield SimpleNamespace(
+                id=5,
+                name="synthetic",
+                unread_count=2,
+                entity="e5",
+                dialog=SimpleNamespace(read_inbox_max_id=10),
+            )
+
+        async def get_messages(self, entity, limit, min_id=0):
+            return [m for m in history if m.id > min_id][:limit]
+
+    got = await native.export_unread_messages(Client(), {})
+    chat = got["chats"][0]
+    assert [m["message_id"] for m in chat["messages"]] == [11, 12] and not chat["truncated"]
+    capped = await native.export_unread_messages(Client(), {"per_chat": 1})
+    assert [m["message_id"] for m in capped["chats"][0]["messages"]] == [12]
+    assert capped["chats"][0]["truncated"]

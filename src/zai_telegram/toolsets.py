@@ -175,7 +175,10 @@ KNOWN_TOOLS = frozenset(tool for spec in TOOLSETS.values() for tool in spec["too
 ALL_TOOLS = frozenset(
     tool for name, spec in TOOLSETS.items() if name not in OPT_IN_TOOLSETS for tool in spec["tools"]
 )
-WRITE_TOOL_NAMES = frozenset(TOOLSETS["messages_write"]["tools"] + TOOLSETS["advanced_write"]["tools"])
+# Every tool of a write toolset: read-only mode removes these even when listed in TELEGRAM_TOOLS.
+WRITE_TOOL_NAMES = frozenset(
+    tool for name in WRITE_TOOLSETS if name in TOOLSETS for tool in TOOLSETS[name]["tools"]
+)
 
 # Argument names that address a chat; checked against the chat ACL.
 CHAT_ARGUMENTS = ("chat_id", "to_chat_id", "from_chat_id", "group_id", "channel_id", "peer")
