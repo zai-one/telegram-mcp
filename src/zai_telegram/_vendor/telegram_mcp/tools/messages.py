@@ -729,9 +729,12 @@ async def list_messages(
         # Prepare filter parameters
         params = {}
         if search_query:
-            # IMPORTANT: Do not combine offset_date with search.
-            # Use server-side search alone, then enforce date bounds client-side.
+            # zai backport (upstream 312cd00): with search, offset_date is sent as
+            # messages.search max_date on the first request only, so the walk starts
+            # at to_date; client-side date checks below stay as a safety net.
             params["search"] = search_query
+            if to_date_obj:
+                params["offset_date"] = to_date_obj + timedelta(microseconds=1)
             messages = []
             async for msg in cl.iter_messages(entity, **params):  # newest -> oldest
                 if to_date_obj and msg.date > to_date_obj:
@@ -1555,7 +1558,16 @@ async def send_reaction(
     """
     try:
         cl = get_client(account)
-        from telethon.tl.types import ReactionEmoji
+        from telethon.tl.types import ReactionCustomEmoji, ReactionEmoji
+
+        # zai backport (upstream 7fc6b4a): custom:<document_id> reactions.
+        if emoji.startswith("custom:"):
+            document_id = emoji.removeprefix("custom:")
+            if not document_id.isascii() or not document_id.isdigit() or int(document_id) <= 0:
+                return "Error: invalid custom reaction. Use custom:<positive document ID>."
+            reaction = ReactionCustomEmoji(document_id=int(document_id))
+        else:
+            reaction = ReactionEmoji(emoticon=emoji)
 
         peer = await resolve_input_entity(chat_id, cl)
         await cl(
@@ -1563,7 +1575,7 @@ async def send_reaction(
                 peer=peer,
                 msg_id=message_id,
                 big=big,
-                reaction=[ReactionEmoji(emoticon=emoji)],
+                reaction=[reaction],
             )
         )
         return f"Reaction '{emoji}' sent to message {message_id} in chat {chat_id}."
@@ -1647,7 +1659,11 @@ async def get_message_reactions(
         )
 
         if not result.reactions:
-            return f"No reactions on message {message_id} in chat {chat_id}."
+            # zai backport (upstream 7fc6b4a): empty list instead of prose.
+            return json.dumps(
+                {"message_id": message_id, "chat_id": str(chat_id), "reactions": [], "count": 0},
+                indent=2,
+            )
 
         reactions_data = []
         for reaction in result.reactions:

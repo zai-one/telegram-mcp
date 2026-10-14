@@ -14,6 +14,7 @@ Filtering happens once at registration (no dynamic meta-tools). Env:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from collections.abc import Iterable, Mapping
@@ -62,8 +63,16 @@ TOOLSETS: dict[str, dict[str, Any]] = {
         ),
     },
     "advanced_read": {
-        "description": "Opt-in: generic telegram_read over ~40 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",
+        "description": "Opt-in: generic telegram_read over ~50 reviewed Telethon reads (participants, pinned, reactions, folders, profiles...).",
         "tools": ("telegram_read",),
+    },
+    "event_feed": {
+        "description": "Opt-in: live feed of new/edited/deleted messages (Telethon events, cursor poll).",
+        "tools": ("telegram_poll_events",),
+    },
+    "account_admin": {
+        "description": "Opt-in, stdio only: add an account in chat via QR login (no codes or passwords in chat).",
+        "tools": ("telegram_add_account",),
     },
     "advanced_write": {
         "description": "Generic telegram_write over the reviewed allowlist, limited to enabled write categories.",
@@ -96,6 +105,7 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
         "press_inline_button",
         "send_sticker",
         "send_gif",
+        "vote_poll",
     ),
     "folders_drafts": (
         "save_draft",
@@ -109,6 +119,7 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
         "unmute_chat",
         "archive_chat",
         "unarchive_chat",
+        "rename_folder",
     ),
     "contacts": (
         "add_contact",
@@ -137,6 +148,11 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
         "import_chat_invite",
         "enable_forum_topics",
         "create_forum_topic",
+        "edit_forum_topic",
+        "delete_forum_topic",
+        "remove_user",
+        "get_invite_link",
+        "export_chat_invite",
     ),
     "channels": ("create_channel", "subscribe_public_channel"),
     "media": ("send_file", "send_album", "download_media", "send_voice", "upload_file"),
@@ -150,9 +166,9 @@ WRITE_CATEGORIES: dict[str, tuple[str, ...]] = {
 }
 
 DEFAULT_TOOLSETS = ("core", "messages_read", "messages_write", "events", "chat_insights")
-WRITE_TOOLSETS = frozenset({"messages_write", "advanced_write"} | set(WRITE_CATEGORIES))
+WRITE_TOOLSETS = frozenset({"messages_write", "advanced_write", "account_admin"} | set(WRITE_CATEGORIES))
 # Opt-in toolsets are never part of "all": name them explicitly (token budget).
-OPT_IN_TOOLSETS = frozenset({"advanced_read"})
+OPT_IN_TOOLSETS = frozenset({"advanced_read", "event_feed", "account_admin"})
 KNOWN_TOOLSETS = tuple(TOOLSETS) + tuple(name for name in WRITE_CATEGORIES if name not in TOOLSETS)
 ALL_TOOLSETS = tuple(name for name in KNOWN_TOOLSETS if name not in OPT_IN_TOOLSETS)
 KNOWN_TOOLS = frozenset(tool for spec in TOOLSETS.values() for tool in spec["tools"])
@@ -188,11 +204,12 @@ ACCOUNT_WIDE_WRITES = frozenset(
         "set_privacy_settings",
         "set_bot_commands",
         "upload_file",
+        "rename_folder",
     }
 )
 # Upstream reads that name one user but return that user's other chats. Under
 # any chat ACL they would list chats outside it, so they are denied.
-CHAT_LISTING_READS = frozenset({"get_common_chats", "get_contact_chats"})
+CHAT_LISTING_READS = frozenset({"get_common_chats", "get_contact_chats", "export_unread_messages"})
 
 
 def _split(value: str | None) -> list[str]:
@@ -280,6 +297,7 @@ class Surface:
                 "TELEGRAM_TOOLS": "extra tool names",
                 "TELEGRAM_DISABLED_TOOLS": "tool names to hide",
                 "TELEGRAM_READ_ONLY": "1 hides every write",
+                "TELEGRAM_TOOL_LOADING": "eager (default) | lazy: core tools + telegram_enable_toolsets",
                 "TELEGRAM_ALLOWED_CHATS": "ids/@usernames; set = deny others",
                 "TELEGRAM_DENIED_CHATS": "ids/@usernames always denied",
                 "TELEGRAM_RESPONSE_DETAIL": "full (default) | summary: drop empty fields, truncate long texts",
@@ -394,6 +412,14 @@ def chat_targets(tool: str, arguments: Mapping[str, Any]) -> list[Any]:
         targets.extend(chat_targets("upstream", nested))
         # A user/contact id addresses that person's private chat.
         targets.extend(nested[key] for key in ("user_id", "contact_id", "username") if nested.get(key))
+        if nested.get("link") is not None:
+            # A t.me message link names its chat: the ACL checks exactly the chat the
+            # native reader will open. An unparsable link adds no target (fail closed).
+            from zai_telegram.native import parse_message_link
+            from zai_telegram.transport import ProviderError
+
+            with contextlib.suppress(ProviderError):
+                targets.append(parse_message_link(nested["link"])[0])
     for item in arguments.get("items") or ():
         if isinstance(item, Mapping) and item.get("recipient_ref") is not None:
             targets.append(item["recipient_ref"])
@@ -484,3 +510,29 @@ def compact(value: Any, max_text_chars: int) -> Any:
             out[key] = compact(item, max_text_chars)
         return out
     return value
+
+
+@dataclass(frozen=True)
+class LazyProfile:
+    """What lazy_loading.install needs: toolsets, one-line notes and the start core."""
+
+    service: str = "telegram"
+    env: str = "TELEGRAM"
+    lazy_core: tuple[str, ...] = (
+        *TOOLSETS["core"]["tools"],
+        "telegram_get_conversation_context",
+        "telegram_search_messages",
+        "telegram_send_message",
+    )
+
+    @property
+    def toolsets(self) -> dict[str, tuple[str, ...]]:
+        return {name: tuple(spec["tools"]) for name, spec in TOOLSETS.items()}
+
+    @property
+    def toolset_notes(self) -> dict[str, str]:
+        return {name: spec["description"] for name, spec in TOOLSETS.items()}
+
+
+LAZY_PROFILE = LazyProfile()
+

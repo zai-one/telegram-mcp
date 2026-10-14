@@ -1,0 +1,189 @@
+--- a/telegram_mcp/runtime.py
++++ b/telegram_mcp/runtime.py
+@@ -423,7 +423,11 @@
+ 
+ 
+ _last_conn_verified: dict[int, float] = {}
++# zai backport (upstream 2980601): one reconnect per client at a time.
++_conn_locks: dict[int, asyncio.Lock] = {}
+ _CONN_VERIFY_INTERVAL: float = 30.0  # seconds between live pings
++# zai backport (upstream dd71a12): bounded reconnect, never interactive login.
++_RECONNECT_TIMEOUT: float = 30.0
+ 
+ 
+ async def _force_reconnect(cl: TelegramClient):
+@@ -434,10 +438,24 @@
+         await cl.disconnect()
+     except Exception:
+         pass
+-    await cl.connect()
++    try:
++        await asyncio.wait_for(cl.connect(), timeout=_RECONNECT_TIMEOUT)
++    except asyncio.TimeoutError as exc:
++        raise ConnectionError(
++            f"Reconnecting to Telegram timed out after {_RECONNECT_TIMEOUT:.0f}s."
++        ) from exc
+     if not await cl.is_user_authorized():
+-        reconnect_logger.warning("Client not authorized after reconnect, calling start()...")
+-        await cl.start()
++        # Never fall back to cl.start(): its phone/code prompts call input()
++        # synchronously, blocking the event loop and, over stdio, reading MCP
++        # protocol frames as a phone number.
++        try:
++            await cl.disconnect()
++        except Exception:
++            pass
++        raise RuntimeError(
++            "Telegram session is not authorized after reconnect (terminated or logged out). "
++            "Re-authorize outside the server and restart it."
++        )
+     _last_conn_verified[id(cl)] = time.time()
+     reconnect_logger.warning("Forced reconnect successful")
+ 
+@@ -457,24 +475,27 @@
+ 
+     key = id(cl)
+ 
+-    if not cl.is_connected():
+-        await _force_reconnect(cl)
+-        return
+-
+-    # Skip verification if recently confirmed alive
+-    now = time.time()
+-    if now - _last_conn_verified.get(key, 0.0) < _CONN_VERIFY_INTERVAL:
+-        return
+-
+-    # Verify with a lightweight Telegram API call
+-    try:
+-        await asyncio.wait_for(
+-            cl(functions.help.GetNearestDcRequest()),
+-            timeout=5.0,
+-        )
+-        _last_conn_verified[key] = now
+-    except (ConnectionError, OSError, asyncio.TimeoutError, Exception):
+-        await _force_reconnect(cl)
++    # Concurrent tool calls must not reconnect the same client in parallel:
++    # one call's disconnect() would tear down another's in-flight connect().
++    async with _conn_locks.setdefault(key, asyncio.Lock()):
++        if not cl.is_connected():
++            await _force_reconnect(cl)
++            return
++
++        # Skip verification if recently confirmed alive
++        now = time.time()
++        if now - _last_conn_verified.get(key, 0.0) < _CONN_VERIFY_INTERVAL:
++            return
++
++        # Verify with a lightweight Telegram API call
++        try:
++            await asyncio.wait_for(
++                cl(functions.help.GetNearestDcRequest()),
++                timeout=5.0,
++            )
++            _last_conn_verified[key] = now
++        except (ConnectionError, OSError, asyncio.TimeoutError, Exception):
++            await _force_reconnect(cl)
+ 
+ 
+ # Setup robust logging with both file and console output
+--- a/telegram_mcp/tools/messages.py
++++ b/telegram_mcp/tools/messages.py
+@@ -729,9 +729,12 @@
+         # Prepare filter parameters
+         params = {}
+         if search_query:
+-            # IMPORTANT: Do not combine offset_date with search.
+-            # Use server-side search alone, then enforce date bounds client-side.
++            # zai backport (upstream 312cd00): with search, offset_date is sent as
++            # messages.search max_date on the first request only, so the walk starts
++            # at to_date; client-side date checks below stay as a safety net.
+             params["search"] = search_query
++            if to_date_obj:
++                params["offset_date"] = to_date_obj + timedelta(microseconds=1)
+             messages = []
+             async for msg in cl.iter_messages(entity, **params):  # newest -> oldest
+                 if to_date_obj and msg.date > to_date_obj:
+@@ -1555,7 +1558,16 @@
+     """
+     try:
+         cl = get_client(account)
+-        from telethon.tl.types import ReactionEmoji
++        from telethon.tl.types import ReactionCustomEmoji, ReactionEmoji
++
++        # zai backport (upstream 7fc6b4a): custom:<document_id> reactions.
++        if emoji.startswith("custom:"):
++            document_id = emoji.removeprefix("custom:")
++            if not document_id.isascii() or not document_id.isdigit() or int(document_id) <= 0:
++                return "Error: invalid custom reaction. Use custom:<positive document ID>."
++            reaction = ReactionCustomEmoji(document_id=int(document_id))
++        else:
++            reaction = ReactionEmoji(emoticon=emoji)
+ 
+         peer = await resolve_input_entity(chat_id, cl)
+         await cl(
+@@ -1563,7 +1575,7 @@
+                 peer=peer,
+                 msg_id=message_id,
+                 big=big,
+-                reaction=[ReactionEmoji(emoticon=emoji)],
++                reaction=[reaction],
+             )
+         )
+         return f"Reaction '{emoji}' sent to message {message_id} in chat {chat_id}."
+@@ -1647,7 +1659,11 @@
+         )
+ 
+         if not result.reactions:
+-            return f"No reactions on message {message_id} in chat {chat_id}."
++            # zai backport (upstream 7fc6b4a): empty list instead of prose.
++            return json.dumps(
++                {"message_id": message_id, "chat_id": str(chat_id), "reactions": [], "count": 0},
++                indent=2,
++            )
+ 
+         reactions_data = []
+         for reaction in result.reactions:
+--- a/telegram_mcp/tools/groups.py
++++ b/telegram_mcp/tools/groups.py
+@@ -237,17 +237,25 @@
+     """
+     try:
+         # Enforce safety limit per issue #14
+-        if page_size > 1000:
+-            return "Error: page_size cannot exceed 1000 participants per request."
++        if page < 1 or not 1 <= page_size <= 1000:
++            return "Error: page must be >= 1 and page_size between 1 and 1000."
+ 
+         cl = get_client(account)
+         await ensure_connected(cl)
+ 
+-        # Use iter_participants with offset to fetch only the needed slice,
+-        # avoiding O(N) fetching on later pages.
+-        offset = (page - 1) * page_size
++        # zai backport (upstream d5ddc8c): Telethon's iter_participants has no
++        # ``offset``; skip the prefix and stop once one extra participant proves
++        # a next page (basic groups may ignore ``limit``).
++        skip = (page - 1) * page_size
+         participants = []
+-        async for participant in cl.iter_participants(chat_id, limit=page_size, offset=offset):
++        has_more = False
++        async for participant in cl.iter_participants(chat_id, limit=skip + page_size + 1):
++            if skip:
++                skip -= 1
++                continue
++            if len(participants) == page_size:
++                has_more = True
++                break
+             participants.append(participant)
+ 
+         if not participants:
+@@ -267,8 +275,7 @@
+             records.append(rec)
+         result = format_tool_result(records)
+ 
+-        # Append pagination metadata; has_more indicates whether a next page likely exists
+-        has_more = len(participants) == page_size
++        # Only an actual extra participant establishes another page.
+         result += f"\n\nPage {page} (showing {len(participants)} participants)"
+         if has_more:
+             result += f" — more results available on page {page + 1}"

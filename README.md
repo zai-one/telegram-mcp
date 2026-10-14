@@ -28,10 +28,25 @@ Try asking your assistant:
 
 ## Why this MCP
 
+- Optional lazy tool loading: set `TELEGRAM_TOOL_LOADING=lazy` (or choose it in the setup wizard) to start with a small core and enable toolsets on demand; see [Lazy tool loading](#lazy-tool-loading).
 - Built on the [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp) v3.2.0 tool set (Apache-2.0, vendored with provenance) and adds safety on top.
 - Starts read-only; toolsets, per-chat allow/deny ACL, explicit-confirmation sends with idempotency keys and an outbox.
 - Message text is treated as untrusted; reading never marks messages as read; structured errors with `retry_after_seconds` for flood waits.
 - Compact replies, conversation context and chat insights (topics, admins, channel stats); polling cursors survive restarts.
+
+## Lazy tool loading
+
+Optional lazy tool loading: `TELEGRAM_TOOL_LOADING=lazy` starts with a small core plus `telegram_enable_toolsets` and adds toolsets on demand (`tools/list_changed`). Startup cost (tools/list + instructions, ≈chars/4): eager ≈3558 tokens, lazy ≈1817 tokens (−49%). Default `eager` is unchanged; if your client ignores `tools/list_changed`, keep `eager` or reconnect after enabling. Scope: enablement is per MCP session (FastMCP session visibility) for handshake-era clients (initialize), so one client's enabled toolsets never appear for another. Sessionless clients (2026-07-28 `server/discover`) and the stateless HTTP transport get a new session per request, so enablement does not persist there: use `eager` or `TELEGRAM_TOOLSETS`.
+
+Clients and `notifications/tools/list_changed` (verified against official docs, changelogs or maintainer statements, 2026-10):
+
+| Client | `tools/list_changed` | Source |
+|---|---|---|
+| Claude Code | Supported (interactive: tools, prompts, resources; `-p`/Agent SDK: tools) | [docs: Dynamic tool updates](https://code.claude.com/docs/en/mcp) |
+| VS Code (GitHub Copilot) | Supported (dynamic tool discovery); new tools may reach the agent only on the next turn | [docs](https://code.visualstudio.com/api/extension-guides/ai/mcp), [#303012](https://github.com/microsoft/vscode/issues/303012) |
+| Gemini CLI | Supported (refreshes the tool registry) | [PR #14375](https://github.com/google-gemini/gemini-cli/pull/14375), [PR #21050](https://github.com/google-gemini/gemini-cli/pull/21050) |
+| Cursor | Unreliable: staff confirm a regression in 3.12.x; restart Cursor after enabling | [forum](https://forum.cursor.com/t/mcp-server-regression-does-not-reload-tools-disconnect-does-nothing-ignores-mcp-json-changes-etc/166216) |
+| Claude Desktop, Windsurf, Codex CLI, Cline, Zed, Continue | Unverified: no official statement found; use `eager` or reconnect after enabling | — |
 
 ## Maintained and up to date
 
@@ -143,12 +158,15 @@ Nothing changes unless you set these variables (default: every tool, every chat)
 | `TELEGRAM_DENIED_CHATS` | Always denied. |
 | `TELEGRAM_RESPONSE_DETAIL` | `full` (default, unchanged) or `summary`: drops empty fields and cuts message texts to `TELEGRAM_MAX_TEXT_CHARS` (default 500) with `message_truncated`/`message_length`. |
 
-Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (`telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats`), opt-in `advanced_read` (generic `telegram_read` over ~40 reviewed Telethon reads: participants, pinned, reactions, read-by, folders, drafts, profiles; never part of `all`, enable with `TELEGRAM_TOOLSETS=all,advanced_read`; list in `telegram://guide/advanced-read`), `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
+Toolsets: `core`, `messages_read`, `messages_write`, `events`, `chat_insights` (`telegram_list_topics`, `telegram_get_admins`, `telegram_get_chat_stats`), opt-in `event_feed` (`telegram_poll_events`), opt-in `account_admin` (`telegram_add_account`), opt-in `advanced_read` (generic `telegram_read` over ~50 reviewed Telethon reads: participants, pinned, reactions, read-by, folders, drafts, profiles, message by t.me link, unread export, member rights, voice transcription; never part of `all`, enable with `TELEGRAM_TOOLSETS=all,advanced_read`; list in `telegram://guide/advanced-read`), `advanced_write` (generic `telegram_write`), and write categories for `telegram_write`: `media`, `contacts`, `groups_admin`, `channels`, `folders_drafts`, `profile_privacy`, `stickers_reactions_polls`. Writes still need `TELEGRAM_WRITE_ENABLED=true` and the `telegram:write` scope. The assistant can read the live setup from `telegram://toolsets`. Errors are JSON with `code`, `retryable`, `hint` and `docs` (`telegram://guide/errors`).
 
 ### Several accounts and waiting for replies
 
 - **Multi-account:** add `TELEGRAM_SESSION_STRING_<LABEL>` (e.g. `_WORK`) to the secret file and bind a list in the bindings file: `{"local-operator": ["default", "work"]}`. The first label is the default; every tool then accepts an optional `account` argument and `telegram_list_accounts` shows the labels. Rate limits, cursors and the outbox are per account (outbox records show `account_label`); acknowledge a poll or wait batch with the same `account` that produced it. A plain string binding keeps the old single-account schema (no extra tokens).
 - **Wait for a message:** `telegram_wait_for_new_message(chat_ids, timeout_seconds<=55)` blocks until a new message arrives or returns `status=timeout`. **Settled burst:** `telegram_wait_for_settled_message(chat_ids, settle_seconds=6, max_wait_seconds<=55)` waits until the chat goes quiet (`settled` / `partial` / `timeout`). Both respect the chat allowlist, never send read receipts and pace reads (≤ ~24/min).
+- **Live event feed (opt-in `event_feed`):** `telegram_poll_events` subscribes to Telethon update events and returns **new, edited and deleted** messages across all chats after a client-held cursor (`wait_seconds<=55`, filters `chat_ids`/`kinds`, `gap=true` after a restart or overflow). One feed per account, filtered by the chat ACL. Across restarts only ids and dates are kept (24 h, never text; `TELEGRAM_FEED_PERSIST=0` disables), so a cursor stays valid, messages sent during the downtime are backfilled as `new` events (`TELEGRAM_FEED_BACKFILL=0` disables), and the downtime is reported (`gap_window`). Guide `telegram://guide/events`.
+- **Add an account in chat (opt-in `account_admin`, local stdio only):** `telegram_add_account(label, action=start|status|cancel)` shows a QR code to scan in Telegram (Settings → Devices → Link Desktop Device). No phone, code or 2FA password ever passes through the chat; 2FA accounts finish in a terminal. The session goes straight to the private secret file (never overwritten, never shown). The new account is usually active immediately (hot-activated, `restart_required=false`; every tool takes `account` while `account_admin` is on); restart only if the result says `restart_required=true`.
+- **Add an account from a terminal:** `zai-telegram-mcp-setup --add-account work --directory <setup dir> [--qr]` logs in by phone code or QR (2FA password typed hidden), appends `TELEGRAM_SESSION_STRING_WORK` to the existing secret file and grants `work` in the bindings file. A running server picks it up on its next call (no restart) and announces the changed tool list.
 
 ## Skills, prompts and guides
 

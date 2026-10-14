@@ -18,6 +18,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.tools import Tool
 
 from zai_telegram.media_policy import FILE_FIELDS, MediaPolicy, download, exact_chat, verify_receipt
+from zai_telegram.native import NATIVE_READS, NATIVE_WRITES
 from zai_telegram.secrets import read_private_secret_env, read_secret_env
 from zai_telegram.transport import ProviderError, ProviderTimeoutError, ProviderTransportError
 from zai_telegram.vendor_integrity import assert_pinned_vendor
@@ -89,7 +90,9 @@ TELEGRAM_READ_ALLOWLIST = frozenset(
         "get_bot_info",
         "get_user_photos",
         "get_user_status",
+        "export_contacts",
     }
+    | set(NATIVE_READS)
 )
 
 # Frozen write allowlist: upstream tool name -> risk tier. Derived once from the
@@ -172,6 +175,11 @@ TELEGRAM_WRITE_ALLOWLIST: dict[str, str] = {
     "remove_chat_from_folder": "low",
     "delete_folder": "low",
     "reorder_folders": "low",
+    # invite links (create/export a link; reviewed as writes, not reads)
+    "get_invite_link": "medium",
+    "export_chat_invite": "medium",
+    # native parity tools (zai_telegram.native), same gates as vendor writes
+    **{name: spec[1] for name, spec in NATIVE_WRITES.items()},
 }
 
 # Typed convenience write tools exposed on the platform surface -> upstream.
@@ -301,6 +309,7 @@ class TelegramAdapter:
         self.media_policy = media_policy or MediaPolicy()
         self._server: Any | None = None
         self._runtime: ModuleType | None = None
+        self._active_secret: dict[str, str] = {}
         self._load_lock = asyncio.Lock()
 
     def _secret(self) -> dict[str, str]:
@@ -349,10 +358,15 @@ class TelegramAdapter:
             # When write is enabled we start from "all" and then prune to the
             # frozen allowlist, so a vendor upgrade can never auto-expose a new
             # write tool — the platform surface stays deterministic either way.
+            fingerprint = self._fingerprint(secret)
             mode = "all" if self.write_enabled else "read-only"
-            fingerprint = hashlib.sha256(
-                json.dumps([secret, mode, self.media_policy.fingerprint()], sort_keys=True).encode()
-            ).hexdigest()
+            with _PROCESS_RUNTIME_LOCK:
+                changed = _PROCESS_FINGERPRINT is not None and fingerprint != _PROCESS_FINGERPRINT
+            if changed and self._runtime is not None:
+                # A session added by the in-chat flow or by `--add-account` in a
+                # terminal while we run: hot-add it; anything else needs a restart.
+                await self._hot_add_locked(secret)
+                return self._server
             with _PROCESS_RUNTIME_LOCK:
                 if _PROCESS_FINGERPRINT is not None and fingerprint != _PROCESS_FINGERPRINT:
                     raise ProviderError("Telegram process configuration changed; restart required")
@@ -378,8 +392,74 @@ class TelegramAdapter:
                 if self.write_enabled:
                     self._prune_to_write_allowlist(runtime.mcp)
                 self._runtime = runtime
+                self._active_secret = dict(secret)
                 self._server = runtime.mcp
                 return self._server
+
+    def _fingerprint(self, secret: dict[str, str]) -> str:
+        mode = "all" if self.write_enabled else "read-only"
+        return hashlib.sha256(
+            json.dumps([secret, mode, self.media_policy.fingerprint()], sort_keys=True).encode()
+        ).hexdigest()
+
+    async def activate_account(self, label: str) -> bool:
+        """Hot-add a newly saved ``TELEGRAM_SESSION_STRING_<LABEL>`` to the loaded runtime.
+
+        Returns False when no runtime is loaded yet (the next load reads the file).
+        """
+        if _ACCOUNT_LABEL.fullmatch(label) is None or label == "default":
+            raise ProviderError("only labelled accounts can be activated without restart")
+        if self._runtime is None:
+            return False
+        async with self._load_lock:
+            if label in getattr(self._runtime, "clients", {}):
+                return True
+            secret = {k: v for k, v in self._secret().items() if self._allowed_secret_key(k)}
+            if not secret.get(f"TELEGRAM_SESSION_STRING_{label.upper()}"):
+                raise ProviderError("Telegram account session is not saved")
+            await self._hot_add_locked(secret)
+        return label in self._runtime.clients
+
+    async def _hot_add_locked(self, secret: dict[str, str]) -> None:
+        """Accept only a pure addition of labelled sessions to the running credential set.
+
+        Every key the process started with must be unchanged (API id/hash and
+        existing sessions); each added key must be ``TELEGRAM_SESSION_STRING_<LABEL>``
+        for a new label and must authorize. Otherwise a restart is required.
+        Caller holds ``_load_lock``.
+        """
+        global _PROCESS_FINGERPRINT
+        restart = ProviderError("Telegram process configuration changed; restart required")
+        known: dict[str, str] = getattr(self, "_active_secret", None) or {}
+        with _PROCESS_RUNTIME_LOCK:
+            if not known or self._fingerprint(known) != _PROCESS_FINGERPRINT:
+                raise restart
+        if any(secret.get(key) != value for key, value in known.items()):
+            raise restart
+        added = {key: value for key, value in secret.items() if key not in known}
+        prefix = "TELEGRAM_SESSION_STRING_"
+        runtime = self._runtime
+        for key in added:
+            label = key[len(prefix) :].lower() if key.startswith(prefix) else ""
+            if not label or _ACCOUNT_LABEL.fullmatch(label) is None or label == "default":
+                raise restart
+            if label in runtime.clients:
+                raise restart
+        from telethon.sessions import StringSession
+
+        for key, value in sorted(added.items()):
+            label = key[len(prefix) :].lower()
+            client = runtime._build_client(StringSession(value), label)
+            await client.connect()
+            if not await client.is_user_authorized():
+                await client.disconnect()
+                raise ProviderError("new Telegram session is not authorized; restart required")
+            os.environ[key] = value
+            runtime.clients[label] = client
+            known = {**known, key: value}
+            self._active_secret = known
+            with _PROCESS_RUNTIME_LOCK:
+                _PROCESS_FINGERPRINT = self._fingerprint(known)
 
     @staticmethod
     def _prune_to_write_allowlist(server: Any) -> None:
@@ -473,6 +553,8 @@ class TelegramAdapter:
         values = {key: value for key, value in values.items() if value is not None}
         try:
             server = await self._embedded_server()
+            if upstream_tool in NATIVE_WRITES and self._runtime is not None:
+                return await self._native(NATIVE_WRITES[upstream_tool][0], values)
             if upstream_tool == "download_media":
                 return await download(self.media_policy, self._runtime, values)
             if upstream_tool in FILE_FIELDS and "chat_id" in values and self._runtime is not None:
@@ -601,6 +683,8 @@ class TelegramAdapter:
         upstream, values = self._upstream_call(platform_tool, arguments)
         try:
             server = await self._embedded_server()
+            if upstream in NATIVE_READS and self._runtime is not None:
+                return await self._native(NATIVE_READS[upstream], values)
             async with Client(FastMCPTransport(server), timeout=TELEGRAM_UPSTREAM_TIMEOUT_SECONDS) as client:
                 result = await client.call_tool(upstream, values)
         except ProviderError:
@@ -621,6 +705,26 @@ class TelegramAdapter:
         ):
             raise ProviderError("embedded Telegram tool returned an error")
         return value
+
+    async def _native(self, handler, values: dict[str, Any]) -> Any:
+        client = self._runtime.get_client(values["account"])
+        args = {key: value for key, value in values.items() if key != "account"}
+
+        async def run() -> Any:
+            # Same liveness check the vendored tools do before every call: a dropped
+            # connection is re-established (bounded, never interactive) instead of failing.
+            ensure = getattr(self._runtime, "ensure_connected", None)
+            if ensure is not None:
+                await ensure(client)
+            return await handler(client, args)
+
+        return await asyncio.wait_for(run(), TELEGRAM_UPSTREAM_TIMEOUT_SECONDS)
+
+    def event_client(self, account: str) -> Any:
+        """Bound Telethon client for the event feed (loaded runtime only)."""
+        if self._runtime is None or not self.has_account(account):
+            raise ProviderError("Telegram account is not configured")
+        return self._runtime.get_client(account)
 
     async def close(self) -> None:
         if self._runtime is None:
