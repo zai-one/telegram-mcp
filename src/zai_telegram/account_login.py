@@ -9,7 +9,11 @@ Safety model:
 * The session string is written straight into the private secret file (0600,
   atomic replace) under ``TELEGRAM_SESSION_STRING_<LABEL>``; it is never returned.
   An existing label is never overwritten. The bound principal is granted the new
-  label in the bindings file when ``TELEGRAM_BINDINGS_FILE`` is set.
+  label in the bindings file when ``TELEGRAM_BINDINGS_FILE`` is set. Both file
+  updates run under one cross-process lock (in chat and ``--add-account`` alike),
+  and the label is re-checked while holding it.
+* Like every write, it needs ``TELEGRAM_WRITE_ENABLED`` and an enabled provider;
+  both are checked before the QR login starts and again before anything is saved.
 * Hot activation: the new client joins the loaded runtime and the label is
   granted in the live config; with ``account_admin`` every tool already takes
   ``account``, so no restart is needed. Restart only if activation fails.
@@ -58,7 +62,34 @@ def _atomic_write(path: Path, text: str) -> None:
         raise
 
 
+@contextlib.contextmanager
+def _files_lock(secret_path: Path):
+    """Exclusive cross-process lock for the secret + bindings read-modify-replace."""
+    lock_path = secret_path.parent / f".{secret_path.name}.lock"
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)  # retries ~10 s, then raises OSError
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)  # closing the descriptor releases the lock
+
+
+def save_account(secret_path: Path, bindings_path: Path | None, actor: str, label: str, session: str) -> bool:
+    """Store the session and grant the label atomically with respect to other adders."""
+    with _files_lock(secret_path):
+        store_session(secret_path, label, session)
+        return grant_label(bindings_path, actor, label)
+
+
 def store_session(secret_path: Path, label: str, session: str) -> None:
+    """Append one session; callers hold ``_files_lock`` (see ``save_account``)."""
     key = "TELEGRAM_SESSION_STRING" if label == "default" else f"TELEGRAM_SESSION_STRING_{label.upper()}"
     existing = read_private_secret_env(secret_path)
     if existing.get(key):
@@ -203,6 +234,19 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
         if action == "cancel":
             await sessions.cancel(actor)
             return {"status": "cancelled", "label": label}
+
+        async def require_writes() -> None:
+            # Adding an account is a write: same switches as every other write tool.
+            if not runtime.config.telegram_write_enabled:
+                await sessions.cancel(actor)
+                raise PermissionError("Telegram write runtime is not enabled")
+            try:
+                await runtime.registry.ensure_enabled("telegram")
+            except PermissionError:
+                await sessions.cancel(actor)
+                raise
+
+        await require_writes()
         if action == "start":
             await sessions.cancel(actor)
             secret = read_private_secret_env(config.secret_path)
@@ -284,8 +328,11 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
         await sessions.cancel(actor)
         if not session:
             raise ValueError("login produced no session")
-        await asyncio.to_thread(store_session, config.secret_path, label, session)
+        # Re-check: the switches may have been turned off while the user was scanning.
+        await require_writes()
         # The runtime captured the bindings path at start: the embedded Telegram
         # runtime clears TELEGRAM_* variables from os.environ when it loads.
-        granted = await asyncio.to_thread(grant_label, runtime.bindings_path, actor, label)
+        granted = await asyncio.to_thread(
+            save_account, runtime.config.secret_path, runtime.bindings_path, actor, label, session
+        )
         return await _activate(runtime, actor, label, granted)

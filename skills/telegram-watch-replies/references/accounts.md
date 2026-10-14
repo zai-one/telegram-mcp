@@ -32,5 +32,6 @@ Adding an account in chat (opt-in toolset `account_admin`, local stdio server on
 - Accounts added in a terminal while the server runs are picked up on the next call (new session + bindings);
   the client is told its tool list changed and every tool gains `account`. Other secret changes need a restart.
 - The session is written to the private secret file and never shown; existing labels are never overwritten.
+- Needs `TELEGRAM_WRITE_ENABLED=true` and an enabled provider (like every write); hidden in read-only mode.
 
 Live feed of new/edited/deleted messages: `telegram_poll_events` (guide events).

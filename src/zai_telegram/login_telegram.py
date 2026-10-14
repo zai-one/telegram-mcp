@@ -58,7 +58,7 @@ async def add_account(
     existing private secret file (never overwritten); the label is granted to
     ``actor`` in the bindings file. Returns True when the binding was updated.
     """
-    from zai_telegram.account_login import LABEL, grant_label, qr_text, store_session
+    from zai_telegram.account_login import LABEL, qr_text, save_account
     from zai_telegram.secrets import read_private_secret_env
 
     if LABEL.fullmatch(label) is None or label == "default":
@@ -94,7 +94,7 @@ async def add_account(
         session = client.session.save()
         if not session:
             raise ValueError("empty session")
-        await asyncio.to_thread(store_session, secret_path, label, session)
     finally:
         await client.disconnect()
-    return await asyncio.to_thread(grant_label, bindings_path, actor, label)
+    # One lock covers the label re-check and both file updates (in-chat adders too).
+    return await asyncio.to_thread(save_account, secret_path, bindings_path, actor, label, session)

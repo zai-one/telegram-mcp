@@ -82,7 +82,16 @@ async def get_message_by_link(client: Any, args: dict[str, Any]) -> dict[str, An
     return {"chat_id": getattr(entity, "id", None), "message": message_row(message)}
 
 
+UNREAD_SCAN_PER_CHAT = 200
+
+
 async def export_unread_messages(client: Any, args: dict[str, Any]) -> dict[str, Any]:
+    """Newest ``per_chat`` unread incoming messages per chat (ids above the read marker).
+
+    The unread counter is not a history depth: outgoing messages after the unread ones
+    would otherwise displace them. At most 200 messages are scanned per chat; a chat
+    whose unread messages were not all returned is flagged ``truncated``.
+    """
     max_chats = _int(args.get("max_chats", 10), "max_chats", 1, 50)
     per_chat = _int(args.get("per_chat", 20), "per_chat", 1, 100)
     chats = []
@@ -90,13 +99,19 @@ async def export_unread_messages(client: Any, args: dict[str, Any]) -> dict[str,
         unread = int(getattr(dialog, "unread_count", 0) or 0)
         if unread <= 0:
             continue
-        messages = await client.get_messages(dialog.entity, limit=min(unread, per_chat))
+        read_max = getattr(getattr(dialog, "dialog", None), "read_inbox_max_id", None)
+        read_max = read_max if type(read_max) is int and read_max > 0 else 0
+        scanned = list(await client.get_messages(dialog.entity, limit=UNREAD_SCAN_PER_CHAT, min_id=read_max))
+        incoming = [m for m in scanned if not getattr(m, "out", False) and getattr(m, "id", 0) > read_max]
+        # The unread counter bounds how many of them can be unread at all.
+        selected = incoming[: min(unread, per_chat)]
         chats.append(
             {
                 "chat_id": dialog.id,
                 "name": getattr(dialog, "name", None),
                 "unread_count": unread,
-                "messages": [message_row(m) for m in reversed(list(messages))],
+                "messages": [message_row(m) for m in reversed(selected)],
+                "truncated": len(selected) < unread,
             }
         )
         if len(chats) >= max_chats:

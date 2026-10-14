@@ -298,17 +298,23 @@ async def backfill(feed: AccountFeed, client: Any) -> tuple[int, bool]:
     Dialogs are scanned newest first (pinned ones are always checked) and each
     chat is read backwards from the restart time to the window start. Edits and
     deletions during the downtime cannot be recovered. Bounded: 100 dialogs,
-    50 messages per chat, 500 in total.
+    50 messages per chat, 500 in total; hitting any bound reports ``complete=False``.
     """
     start, end = feed.window or (0.0, 0.0)
     found: list[Any] = []
     complete = True
-    async for dialog in client.iter_dialogs(limit=BACKFILL_DIALOGS):
+    seen, reached_old = 0, False
+    # One dialog past the bound tells whether the scan stopped short of the window start.
+    async for dialog in client.iter_dialogs(limit=BACKFILL_DIALOGS + 1):
+        seen += 1
         date = getattr(dialog, "date", None)
         stamp = date.timestamp() if isinstance(date, datetime) else 0.0
         if stamp < start:
             if getattr(dialog, "pinned", False):
                 continue
+            reached_old = True
+            break
+        if seen > BACKFILL_DIALOGS:
             break
         per_chat = 0
         async for message in client.iter_messages(
@@ -323,6 +329,8 @@ async def backfill(feed: AccountFeed, client: Any) -> tuple[int, bool]:
             complete = False
         if len(found) >= BACKFILL_TOTAL:
             break
+    if seen > BACKFILL_DIALOGS and not reached_old:
+        complete = False  # more dialogs changed during the downtime than were scanned
     found.sort(key=lambda m: (m.date, getattr(m, "id", 0)))
     for message in found[:BACKFILL_TOTAL]:
         feed.push({**_message_record("new", message), "backfilled": True})
@@ -376,8 +384,15 @@ def register_feed(server: Any, runtime: Any, surface: Any) -> None:
         label = runtime.config.resolve_account(actor)
         if label is None:
             raise PermissionError("bound account required")
-        await runtime.registry.ensure_enabled("telegram")
-        feed = await registry.feed_for(runtime.adapter, label)
+        opened: dict[str, AccountFeed] = {}
+
+        async def open_feed() -> None:
+            opened["feed"] = await registry.feed_for(runtime.adapter, label)
+
+        # Governed like every read: provider switch, account, cooldown, rate limit and a
+        # concurrency lease held for the whole call (including the long-poll wait).
+        await runtime.registry.read(actor, "telegram", "poll_events", {"cursor": cursor}, open_feed)
+        feed = opened["feed"]
         feed.touch()
         if parsed is not None and parsed[0] != label:
             raise ValueError("cursor belongs to another account; pass the matching account")
@@ -399,8 +414,13 @@ def register_feed(server: Any, runtime: Any, surface: Any) -> None:
             gap, gap_window = True, feed.downtime
         if not gap and after > feed.seq:
             raise ValueError("cursor is ahead of the feed")
-        oldest = feed.ring[0]["seq"] if feed.ring else feed.seq + 1
-        if not gap and after < oldest - 1:
+
+        def overflowed(position: int) -> bool:
+            # Events after ``position`` already left the ring: they are lost.
+            oldest = feed.ring[0]["seq"] if feed.ring else feed.seq + 1
+            return position < oldest - 1
+
+        if not gap and overflowed(after):
             gap = True
         filters = {
             "chats": set(chat_ids) if chat_ids is not None else None,
@@ -423,6 +443,8 @@ def register_feed(server: Any, runtime: Any, surface: Any) -> None:
                         await asyncio.wait_for(feed.changed.wait(), remaining)
                     except TimeoutError:
                         break
+                # The ring may have overflowed while waiting: never skip lost events silently.
+                gap = gap or overflowed(last)
                 events, last, more = EventFeed.select(feed, last, **filters)
         return runtime.clean(
             {

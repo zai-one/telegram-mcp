@@ -23,7 +23,7 @@ Prefer a dedicated tool when one exists (inbox, context, search, topics, admins,
 | Contacts | list_contacts, get_contact_ids, get_contact_chats (contact_id), get_last_interaction (contact_id), get_direct_chat_by_contact (contact_query), get_blocked_users | |
 | Profiles | get_me, get_full_user (username), get_user_status (user_id), get_user_photos (user_id), get_bot_info (bot_username), get_privacy_settings | |
 | Message by t.me link | get_message_by_link | link (t.me/name/id, t.me/s/name/id, t.me/c/id/msg; ACL applies) |
-| Unread messages, all chats (never marks read) | export_unread_messages | max_chats<=50, per_chat<=100 |
+| Unread messages, all chats (never marks read) | export_unread_messages | max_chats<=50, per_chat<=100 (incoming above the read marker; `truncated` if not all returned) |
 | Send-as identities / member rights | get_send_as (chat_id), get_member_admin_status (chat_id, user_id) | |
 | Voice/video note to text (Premium or trial) | transcribe_voice | chat_id, message_id, wait_seconds (0-30, waits for the final text) |
 | Contacts export | export_contacts | |
