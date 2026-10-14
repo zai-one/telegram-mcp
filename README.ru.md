@@ -26,11 +26,25 @@
 
 ## Почему этот MCP
 
-- Ленивая загрузка инструментов (опционально): `TELEGRAM_TOOL_LOADING=lazy` стартует с небольшим ядром и `telegram_enable_toolsets`, остальные наборы включаются по запросу (`tools/list_changed`). Стоимость старта (tools/list + instructions, ≈символы/4): eager ≈3558 токенов, lazy ≈1817 токенов (−49%). По умолчанию `eager` — без изменений; если клиент не поддерживает `tools/list_changed`, оставьте `eager` или переподключитесь после включения. Область: включение действует в пределах MCP-сессии (session visibility FastMCP) для клиентов с initialize; включённые одним клиентом наборы не видны другому. Для клиентов без сессий (2026-07-28 `server/discover`) и stateless HTTP каждый запрос — новая сессия, включение не сохраняется: используйте `eager` или `TELEGRAM_TOOLSETS`.
+- Ленивая загрузка инструментов (опционально): `TELEGRAM_TOOL_LOADING=lazy` (или выбор в мастере настройки) — старт с небольшим ядром, наборы включаются по запросу; см. [Ленивая загрузка инструментов](#ленивая-загрузка-инструментов).
 - Основан на наборе инструментов [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp) v3.2.0 (Apache-2.0, вендорен с указанием происхождения) и добавляет слой безопасности.
 - Старт в режиме только чтения; наборы инструментов, ACL по чатам, отправка с явным подтверждением, ключами идемпотентности и outbox.
 - Текст сообщений считается недоверенным; чтение не помечает сообщения прочитанными; структурированные ошибки с `retry_after_seconds` при flood wait.
 - Компактные ответы, контекст переписки и аналитика чатов (темы, админы, статистика каналов); курсоры опроса переживают перезапуск.
+
+## Ленивая загрузка инструментов
+
+Ленивая загрузка инструментов (опционально): `TELEGRAM_TOOL_LOADING=lazy` стартует с небольшим ядром и `telegram_enable_toolsets`, остальные наборы включаются по запросу (`tools/list_changed`). Стоимость старта (tools/list + instructions, ≈символы/4): eager ≈3558 токенов, lazy ≈1817 токенов (−49%). По умолчанию `eager` — без изменений; если клиент не поддерживает `tools/list_changed`, оставьте `eager` или переподключитесь после включения. Область: включение действует в пределах MCP-сессии (session visibility FastMCP) для клиентов с initialize; включённые одним клиентом наборы не видны другому. Для клиентов без сессий (2026-07-28 `server/discover`) и stateless HTTP каждый запрос — новая сессия, включение не сохраняется: используйте `eager` или `TELEGRAM_TOOLSETS`.
+
+Клиенты и `notifications/tools/list_changed` (проверено по официальной документации, changelog или заявлениям мейнтейнеров, 2026-10):
+
+| Клиент | `tools/list_changed` | Источник |
+|---|---|---|
+| Claude Code | Да (интерактивно: tools, prompts, resources; `-p`/Agent SDK: только tools) | [docs: Dynamic tool updates](https://code.claude.com/docs/en/mcp) |
+| VS Code (GitHub Copilot) | Да (dynamic tool discovery); новые инструменты могут стать доступны агенту только со следующего хода | [docs](https://code.visualstudio.com/api/extension-guides/ai/mcp), [#303012](https://github.com/microsoft/vscode/issues/303012) |
+| Gemini CLI | Да (обновляет реестр инструментов) | [PR #14375](https://github.com/google-gemini/gemini-cli/pull/14375), [PR #21050](https://github.com/google-gemini/gemini-cli/pull/21050) |
+| Cursor | Ненадёжно: регрессия в 3.12.x подтверждена командой Cursor; после включения перезапустите Cursor | [forum](https://forum.cursor.com/t/mcp-server-regression-does-not-reload-tools-disconnect-does-nothing-ignores-mcp-json-changes-etc/166216) |
+| Claude Desktop, Windsurf, Codex CLI, Cline, Zed, Continue | Не проверено: официальных данных нет; используйте `eager` или переподключитесь после включения | — |
 
 ## Поддержка и обновления
 
