@@ -34,6 +34,7 @@ from collections import deque
 from datetime import UTC, datetime
 from typing import Any
 
+from zai_telegram.errors import policy_error
 from zai_telegram.transport import ProviderError
 
 RING_SIZE = 2000
@@ -179,9 +180,12 @@ def _message_record(kind: str, message: Any) -> dict[str, Any]:
 class EventFeed:
     """Per-process registry of account feeds; handlers attach once per account."""
 
-    def __init__(self, persist: FeedStore | None = None) -> None:
+    def __init__(self, persist: FeedStore | None = None, *, backfill: bool = True) -> None:
         self.feeds: dict[str, AccountFeed] = {}
         self.persist = persist
+        # Read once at registration: loading the embedded runtime later clears
+        # TELEGRAM_* variables from os.environ.
+        self.backfill = backfill
 
     def _attach(self, label: str, client: Any) -> AccountFeed:
         from telethon import events
@@ -231,7 +235,7 @@ class EventFeed:
         ping = getattr(client, "get_me", None)
         if callable(ping):
             await ping(input_peer=True)
-        if feed.window is not None and _env_on("TELEGRAM_FEED_BACKFILL"):
+        if feed.window is not None and self.backfill:
             try:
                 count, complete = await asyncio.wait_for(backfill(feed, client), BACKFILL_SECONDS)
             except Exception:  # noqa: BLE001 - backfill is best effort; the window stays reported
@@ -272,7 +276,10 @@ class EventFeed:
                 if not permits(chat):
                     continue
             out.append(dict(record))
-        return out, last, False
+        # The whole ring was examined: nothing newer than feed.seq can be pending. Without
+        # this, an empty ring (events aged out across a restart) left ``last`` behind
+        # ``feed.seq`` and the wait loop spun without ever awaiting.
+        return out, max(last, feed.seq), False
 
 
 BACKFILL_SECONDS = 20
@@ -333,7 +340,7 @@ def parse_cursor(cursor: Any) -> tuple[str, str, int] | None:
 
 def register_feed(server: Any, runtime: Any, surface: Any) -> None:
     persist = FeedStore(runtime.store) if _env_on("TELEGRAM_FEED_PERSIST") else None
-    registry = EventFeed(persist)
+    registry = EventFeed(persist, backfill=_env_on("TELEGRAM_FEED_BACKFILL"))
     runtime.event_feed = registry
 
     @server.tool(
@@ -348,6 +355,10 @@ def register_feed(server: Any, runtime: Any, surface: Any) -> None:
         wait_seconds: int = 0,
     ) -> dict:
         """Live event feed: new/edited/deleted messages after cursor (first call starts it)."""
+        if any(not entry.lstrip("-").isdigit() for entry in surface.chats.denied):
+            # Feed events carry numeric chat ids only: a denylist entry given as @username
+            # could not be matched and its chat would leak into the feed. Fail closed.
+            raise policy_error("chat_access_denied")
         if type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError("limit must be between 1 and 200")
         if type(wait_seconds) is not int or not 0 <= wait_seconds <= WAIT_MAX_SECONDS:

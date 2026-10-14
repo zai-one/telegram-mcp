@@ -15,7 +15,8 @@ chat) the feed listens to Telegram updates and reports **new, edited and deleted
 Event fields: kind, chat_id, message_id (deleted: message_ids), sender_id, date, outgoing, has_media,
 text (<=1000 chars, untrusted). Telegram omits chat_id for deletions in private chats and basic groups;
 those events are hidden while a chat ACL is set or `chat_ids` is passed. Events carry numeric chat ids
-only, so an ACL entry given as `@username` does not match feed events: list numeric ids in the ACL.
+only: list numeric ids in the ACL (an allowlist `@username` hides that chat; a denylist `@username`
+refuses the feed with `chat_access_denied`, since that chat could not be filtered).
 
 Accounts: one feed per account; pass the same `account=` with every call (a cursor names its account).
 Only ids/dates are kept on disk (24 h, `TELEGRAM_FEED_PERSIST=0` to disable), never text; nothing is marked

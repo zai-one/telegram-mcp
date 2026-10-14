@@ -230,3 +230,79 @@ async def test_downtime_backfill_adds_missed_messages_as_new_events(config):
         got = (await client.call_tool(POLL, {"cursor": cursor})).data
     assert [(e["message_id"], e.get("backfilled")) for e in got["events"]] == [(7, True)]
     assert got["gap_window"]["backfilled_new"] == 1 and got["gap_window"]["backfill_complete"]
+
+
+async def test_backfill_opt_out_survives_embedded_runtime_env_wipe(config, monkeypatch):
+    """Regression: TELEGRAM_FEED_BACKFILL=0 is read at start; the embedded runtime later clears TELEGRAM_*."""
+    adapter = FeedAdapter()
+    async with Client(server(config, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+
+    class NoBackfillClient(FakeClient):
+        async def iter_dialogs(self, limit):
+            raise AssertionError("backfill must not run when TELEGRAM_FEED_BACKFILL=0")
+            yield  # pragma: no cover
+
+    adapter.clients["default"] = NoBackfillClient()
+    monkeypatch.setenv("TELEGRAM_FEED_BACKFILL", "0")
+    restarted = server(config, adapter)
+    monkeypatch.delenv("TELEGRAM_FEED_BACKFILL")  # what adapter._embedded_server does on load
+    async with Client(restarted) as client:
+        await client.call_tool(POLL, {})
+        got = (await client.call_tool(POLL, {"cursor": cursor})).data
+    assert got["events"] == [] and got["gap_window"].get("backfilled_new") is None
+
+
+def test_select_advances_past_events_no_longer_in_the_ring():
+    from zai_telegram.feed import AccountFeed, EventFeed
+
+    feed = AccountFeed("default")
+    feed.seq = 5  # events 3..5 aged out of the ring (e.g. dropped after a restart)
+    got = EventFeed.select(
+        feed, 2, chats=None, kinds={"new"}, limit=10, permits=lambda chat: True, acl_active=False
+    )
+    assert got == ([], 5, False)
+
+
+async def test_wait_never_blocks_the_event_loop_when_ring_lost_events(config, monkeypatch):
+    """Regression: an empty ring behind feed.seq made the wait loop spin without awaiting."""
+    import zai_telegram.feed as feed_module
+
+    captured = {}
+    original = feed_module.EventFeed._attach
+
+    def attach(self, label, client):
+        captured[label] = original(self, label, client)
+        return captured[label]
+
+    monkeypatch.setattr(feed_module.EventFeed, "_attach", attach)
+    adapter = FeedAdapter()
+    fake = adapter.clients["default"]
+    ticks = 0
+
+    async def ticker():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    async with Client(server(config, adapter)) as client:
+        cursor = (await client.call_tool(POLL, {})).data["next_cursor"]
+        for message_id in (1, 2, 3):
+            await fake.emit("new", chat_id=101, id=message_id)
+        captured["default"].ring.clear()
+        task = asyncio.create_task(ticker())
+        got = (await client.call_tool(POLL, {"cursor": cursor, "wait_seconds": 1})).data
+        task.cancel()
+    assert got["events"] == [] and got["gap"] and got["next_cursor"].endswith(".3")
+    assert ticks >= 5  # a spinning loop starves every other task for the whole wait
+
+
+async def test_denylist_username_refuses_the_feed(config):
+    """Regression: feed events carry numeric chat ids only; a @username denylist entry would leak."""
+    adapter = FeedAdapter()
+    async with Client(server(config, adapter, denied_chats=["@spamchat"])) as client:
+        with pytest.raises(ToolError):
+            await client.call_tool(POLL, {})
+    async with Client(server(config, adapter, denied_chats=["-100777"])) as client:
+        assert (await client.call_tool(POLL, {})).data["status"] == "started"
