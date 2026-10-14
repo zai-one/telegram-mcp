@@ -28,6 +28,7 @@ def test_every_native_tool_is_on_an_allowlist_and_in_a_category():
         ("https://t.me/durov/123", ("durov", 123)),
         ("t.me/c/1234567/42", (-1001234567, 42)),
         ("https://t.me/c/1234567/9/42?single", (-1001234567, 42)),
+        ("https://t.me/s/durov/77", ("durov", 77)),
     ],
 )
 def test_message_link_parsing(link, expected):
@@ -157,3 +158,87 @@ async def test_remove_user_never_removes_the_account_itself(own):
     assert client.kicked == []
     await native.remove_user(client, {"chat_id": "-100123", "user_id": "42"})
     assert client.kicked == [42]
+
+
+async def test_message_by_link_is_allowed_for_an_allowlisted_chat(config):
+    adapter = FixtureAdapter()
+    surface = build_surface("all,advanced_read", allowed_chats=["okchan", "-1001234567"])
+    async with Client(create_server(config, transport="stdio", adapter=adapter, surface=surface)) as client:
+        for link in ("https://t.me/s/okchan/5", "t.me/c/1234567/9"):
+            await client.call_tool(
+                "telegram_read", {"tool": "get_message_by_link", "arguments": {"link": link}}
+            )
+        for link in ("https://t.me/other/5", "t.me/c/7654321/9", "https://evil.example/okchan/5"):
+            with pytest.raises(ToolError, match="chat_access_denied"):
+                await client.call_tool(
+                    "telegram_read", {"tool": "get_message_by_link", "arguments": {"link": link}}
+                )
+    assert len(adapter.calls) == 2
+
+
+class TranscribeClient:
+    def __init__(self, pending=True, final=True):
+        self.handlers, self.pending, self.final = [], pending, final
+
+    async def get_input_entity(self, chat):
+        return chat
+
+    def add_event_handler(self, cb, event):
+        self.handlers.append(cb)
+
+    def remove_event_handler(self, cb, event):
+        self.handlers.remove(cb)
+
+    async def __call__(self, request):
+        import asyncio
+
+        from telethon.tl import types
+
+        if self.pending and self.final:
+            update = types.UpdateTranscribedAudio(
+                peer=types.PeerUser(1), msg_id=request.msg_id, transcription_id=9, text="hello world"
+            )
+            other = types.UpdateTranscribedAudio(
+                peer=types.PeerUser(1), msg_id=request.msg_id, transcription_id=8, text="wrong"
+            )
+            loop = asyncio.get_running_loop()
+            for u in (other, update):
+                loop.call_later(0.05, lambda u=u: [asyncio.ensure_future(h(u)) for h in list(self.handlers)])
+        return SimpleNamespace(pending=self.pending, transcription_id=9, text="hel", trial_remains_num=None)
+
+
+async def test_transcribe_waits_for_the_final_update():
+    client = TranscribeClient()
+    result = await native.transcribe_voice(client, {"chat_id": "1", "message_id": 3, "wait_seconds": 2})
+    assert result["text"] == "hello world" and result["pending"] is False and not client.handlers
+
+
+async def test_transcribe_times_out_and_returns_partial():
+    client = TranscribeClient(final=False)
+    result = await native.transcribe_voice(client, {"chat_id": "1", "message_id": 3, "wait_seconds": 0})
+    assert result["pending"] is True and result["text"] == "hel" and not client.handlers
+    with pytest.raises(ProviderError):
+        await native.transcribe_voice(client, {"chat_id": "1", "message_id": 3, "wait_seconds": 99})
+
+
+async def test_rename_folder_handles_shared_chatlists():
+    from telethon.tl import types
+
+    shared = types.DialogFilterChatlist(
+        id=4, title=types.TextWithEntities("Old", []), pinned_peers=[], include_peers=[types.InputPeerSelf()]
+    )
+
+    class FolderClient:
+        sent = []
+
+        async def __call__(self, request):
+            if type(request).__name__ == "GetDialogFiltersRequest":
+                return SimpleNamespace(filters=[shared])
+            self.sent.append(request)
+            return True
+
+    client = FolderClient()
+    await native.rename_folder(client, {"folder_id": 4, "title": "New"})
+    sent = client.sent[0]
+    assert sent.id == 4 and isinstance(sent.filter, types.DialogFilterChatlist)
+    assert sent.filter.title.text == "New"

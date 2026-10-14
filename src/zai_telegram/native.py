@@ -16,8 +16,9 @@ from typing import Any
 
 from zai_telegram.transport import ProviderError
 
+# t.me/<user>/<id>, t.me/s/<user>/<id> (public web preview), t.me/c/<internal>/[<topic>/]<id>
 _LINK = re.compile(
-    r"^(?:https?://)?(?:t\.me|telegram\.me)/(?:(c)/(\d{1,20})|([A-Za-z][A-Za-z0-9_]{3,31}))"
+    r"^(?:https?://)?(?:t\.me|telegram\.me)/(?:(c)/(\d{1,20})|(?:s/)?([A-Za-z][A-Za-z0-9_]{3,31}))"
     r"(?:/\d{1,10})?/(\d{1,10})(?:\?.*)?$"
 )
 
@@ -146,19 +147,57 @@ async def get_member_admin_status(client: Any, args: dict[str, Any]) -> dict[str
     }
 
 
-async def transcribe_voice(client: Any, args: dict[str, Any]) -> dict[str, Any]:
-    from telethon.tl import functions
+TRANSCRIBE_WAIT_MAX = 30
 
+
+async def transcribe_voice(client: Any, args: dict[str, Any]) -> dict[str, Any]:
+    """messages.transcribeAudio; a ``pending`` result is completed by updateTranscribedAudio
+    (https://core.telegram.org/api/transcribe), awaited here for up to ``wait_seconds``."""
+    import asyncio
+
+    from telethon import events
+    from telethon.tl import functions, types
+
+    wait = _int(args.get("wait_seconds", 15), "wait_seconds", 0, TRANSCRIBE_WAIT_MAX)
     entity = await client.get_input_entity(_chat(args.get("chat_id")))
-    result = await client(
-        functions.messages.TranscribeAudioRequest(
-            peer=entity, msg_id=_int(args.get("message_id"), "message_id", 1, 2**31 - 1)
-        )
-    )
-    text = getattr(result, "text", "") or ""
+    message_id = _int(args.get("message_id"), "message_id", 1, 2**31 - 1)
+    # Subscribe before the request: the final update may arrive before the response is handled.
+    seen: dict[int, Any] = {}
+    done = asyncio.Event()
+
+    async def on_update(update: Any) -> None:
+        if getattr(update, "msg_id", None) == message_id:
+            seen[getattr(update, "transcription_id", 0)] = update
+            done.set()
+
+    event = events.Raw(types.UpdateTranscribedAudio)
+    client.add_event_handler(on_update, event)
+    try:
+        result = await client(functions.messages.TranscribeAudioRequest(peer=entity, msg_id=message_id))
+        transcription = getattr(result, "transcription_id", None)
+        text, pending = getattr(result, "text", "") or "", bool(getattr(result, "pending", False))
+        deadline = asyncio.get_running_loop().time() + wait
+        while pending:
+            update = seen.get(transcription)
+            if update is not None:
+                text = getattr(update, "text", "") or text
+                pending = bool(getattr(update, "pending", False))
+                seen.pop(transcription, None)
+                continue
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            done.clear()
+            try:
+                await asyncio.wait_for(done.wait(), remaining)
+            except TimeoutError:
+                break
+    finally:
+        client.remove_event_handler(on_update, event)
     return {
         "text": text[:8192],
-        "pending": bool(getattr(result, "pending", False)),
+        "pending": pending,
+        "transcription_id": transcription,
         "trial_remains": getattr(result, "trial_remains_num", None),
         "untrusted_content": True,
     }
@@ -244,7 +283,10 @@ async def rename_folder(client: Any, args: dict[str, Any]) -> dict[str, Any]:
         raise ProviderError("Telegram folder title length must be between 1 and 12")
     result = await client(functions.messages.GetDialogFiltersRequest())
     filters = getattr(result, "filters", result)
-    current = next((f for f in filters if isinstance(f, types.DialogFilter) and f.id == folder_id), None)
+    # Own folders (dialogFilter) and imported shared folders (dialogFilterChatlist) are both
+    # renamed with messages.updateDialogFilter (https://core.telegram.org/api/folders).
+    kinds = (types.DialogFilter, types.DialogFilterChatlist)
+    current = next((f for f in filters if isinstance(f, kinds) and f.id == folder_id), None)
     if current is None:
         raise ProviderError("Telegram folder not found")
     current.title = types.TextWithEntities(text=title.strip(), entities=[])

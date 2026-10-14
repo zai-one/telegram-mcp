@@ -14,6 +14,7 @@ Filtering happens once at registration (no dynamic meta-tools). Env:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from collections.abc import Iterable, Mapping
@@ -410,6 +411,14 @@ def chat_targets(tool: str, arguments: Mapping[str, Any]) -> list[Any]:
         targets.extend(chat_targets("upstream", nested))
         # A user/contact id addresses that person's private chat.
         targets.extend(nested[key] for key in ("user_id", "contact_id", "username") if nested.get(key))
+        if nested.get("link") is not None:
+            # A t.me message link names its chat: the ACL checks exactly the chat the
+            # native reader will open. An unparsable link adds no target (fail closed).
+            from zai_telegram.native import parse_message_link
+            from zai_telegram.transport import ProviderError
+
+            with contextlib.suppress(ProviderError):
+                targets.append(parse_message_link(nested["link"])[0])
     for item in arguments.get("items") or ():
         if isinstance(item, Mapping) and item.get("recipient_ref") is not None:
             targets.append(item["recipient_ref"])
