@@ -50,7 +50,7 @@ Clients and `notifications/tools/list_changed` (verified against official docs, 
 
 ## Maintained and up to date
 
-- Actively maintained by ZAI.ONE: current version 0.5.0; release notes in [CHANGELOG.md](CHANGELOG.md) and [Releases](https://github.com/zai-one/telegram-mcp/releases).
+- Actively maintained by ZAI.ONE: current version 0.6.0; release notes in [CHANGELOG.md](CHANGELOG.md) and [Releases](https://github.com/zai-one/telegram-mcp/releases).
 - Built-in update check: ask the assistant to run `telegram_check_update` (public GitHub API, no credentials, cached; nothing is installed automatically; `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1` turns it off).
 - Follows current MCP practice: tool annotations (read-only / destructive hints), toolsets and read-only mode, server `instructions`, prompts and resources, structured errors with recovery hints, secrets kept out of tool output, a token budget for tool descriptions enforced in tests.
 - CI runs the test suite on Linux and Windows for every pull request.
@@ -62,13 +62,13 @@ Clients and `notifications/tools/list_changed` (verified against official docs, 
 Needs only [uv](https://docs.astral.sh/uv/getting-started/installation/) and an API ID/hash from [my.telegram.org](https://my.telegram.org/apps).
 
 ```sh
-uvx --from git+https://github.com/zai-one/telegram-mcp@v0.5.0 zai-telegram-mcp-setup --directory ~/telegram-mcp
+uvx --from git+https://github.com/zai-one/telegram-mcp@v0.6.0 zai-telegram-mcp-setup --directory ~/telegram-mcp
 ```
 
 The wizard logs you in interactively, stores secrets in private files and writes `mcp-client.json` (a ready `uvx` entry) into that directory. Paste its `mcpServers` block into Claude Desktop / Cursor, or for Claude Code:
 
 ```sh
-claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.5.0 zai-telegram-mcp --config ~/telegram-mcp/mcp.local.json
+claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.6.0 zai-telegram-mcp --config ~/telegram-mcp/mcp.local.json
 ```
 
 Then ask: *"What's new in my Telegram? Don't mark anything read."* An npm/`npx` shim is not provided: it would still need Python/uv, so uvx is the shortest path.
@@ -128,7 +128,7 @@ If tools do not appear, check the absolute path, whether the client can find `uv
 
 ```bash
 # Claude Code (MCP only)
-claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.5.0 zai-telegram-mcp --config /ABSOLUTE/PATH/mcp.local.json
+claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.6.0 zai-telegram-mcp --config /ABSOLUTE/PATH/mcp.local.json
 # Claude Code plugin (MCP + skills) from this repository; set TELEGRAM_MCP_CONFIG to your mcp.local.json
 /plugin marketplace add zai-one/telegram-mcp
 /plugin install telegram@zai-telegram
@@ -139,7 +139,7 @@ Codex `~/.codex/config.toml`:
 ```toml
 [mcp_servers.telegram]
 command = "uvx"
-args = ["--from", "git+https://github.com/zai-one/telegram-mcp@v0.5.0", "zai-telegram-mcp", "--config", "/ABSOLUTE/PATH/mcp.local.json"]
+args = ["--from", "git+https://github.com/zai-one/telegram-mcp@v0.6.0", "zai-telegram-mcp", "--config", "/ABSOLUTE/PATH/mcp.local.json"]
 env = { TELEGRAM_TOOLSETS = "default" }
 ```
 

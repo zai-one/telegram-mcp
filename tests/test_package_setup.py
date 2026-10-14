@@ -124,6 +124,6 @@ def test_uvx_snippet_when_running_from_uvx(tmp_path, monkeypatch):
     assert entry["args"][:3] == ["--from", setup.UVX_SOURCE, "zai-telegram-mcp"]
     assert setup.UVX_SOURCE.endswith(f"/zai-one/telegram-mcp@v{__version__}")
     assert setup.client_config(config, "/py")["mcpServers"][setup.SERVICE]["command"] == "/py"
-    monkeypatch.setenv("ZAI_TELEGRAM_UVX_FROM", "zai-telegram-mcp==0.5.0")
+    monkeypatch.setenv("ZAI_TELEGRAM_UVX_FROM", "zai-telegram-mcp==0.6.0")
     monkeypatch.setattr(setup.sys, "prefix", "/usr")
-    assert setup.client_config(config)["mcpServers"][setup.SERVICE]["args"][1] == "zai-telegram-mcp==0.5.0"
+    assert setup.client_config(config)["mcpServers"][setup.SERVICE]["args"][1] == "zai-telegram-mcp==0.6.0"
