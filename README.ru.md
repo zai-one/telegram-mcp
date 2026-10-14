@@ -48,7 +48,7 @@
 
 ## Поддержка и обновления
 
-- Проект активно поддерживает ZAI.ONE: текущая версия 0.5.0; изменения в [CHANGELOG.md](CHANGELOG.md) и [Releases](https://github.com/zai-one/telegram-mcp/releases).
+- Проект активно поддерживает ZAI.ONE: текущая версия 0.6.0; изменения в [CHANGELOG.md](CHANGELOG.md) и [Releases](https://github.com/zai-one/telegram-mcp/releases).
 - Встроенная проверка обновлений: попросите ассистента вызвать `telegram_check_update` (публичный GitHub API, без учётных данных, с кэшем; ничего не устанавливается автоматически; отключение: `TELEGRAM_MCP_DISABLE_UPDATE_CHECK=1`).
 - Следует актуальным практикам MCP: аннотации инструментов (read-only / destructive), наборы инструментов и режим только чтения, `instructions` сервера, промпты и ресурсы, структурированные ошибки с подсказками, секреты не попадают в ответы, бюджет токенов описаний проверяется в тестах.
 - CI прогоняет тесты на Linux и Windows для каждого pull request.
@@ -60,13 +60,13 @@
 Нужны только [uv](https://docs.astral.sh/uv/getting-started/installation/) и API ID/hash с [my.telegram.org](https://my.telegram.org/apps).
 
 ```sh
-uvx --from git+https://github.com/zai-one/telegram-mcp@v0.5.0 zai-telegram-mcp-setup --directory ~/telegram-mcp
+uvx --from git+https://github.com/zai-one/telegram-mcp@v0.6.0 zai-telegram-mcp-setup --directory ~/telegram-mcp
 ```
 
 Мастер интерактивно выполнит вход, сохранит секреты в закрытые файлы и создаст `mcp-client.json` с готовой записью `uvx`. Вставьте блок `mcpServers` в Claude Desktop / Cursor, а для Claude Code:
 
 ```sh
-claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.5.0 zai-telegram-mcp --config ~/telegram-mcp/mcp.local.json
+claude mcp add telegram -- uvx --from git+https://github.com/zai-one/telegram-mcp@v0.6.0 zai-telegram-mcp --config ~/telegram-mcp/mcp.local.json
 ```
 
 Первый запрос: *«Что нового в Telegram? Ничего не помечай прочитанным».* Дополнительные чтения (участники, закреплённые, реакции, папки, профили) — набор `advanced_read` (`TELEGRAM_TOOLSETS=all,advanced_read`), он не входит в `all`.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - Upgrade note: `TELEGRAM_TOOLSETS=all` now also enables the new opt-in toolsets except `account_admin` and `advanced_read`, and an existing `groups_admin` (or `all`) gains `remove_user`, `delete_forum_topic` and the invite-link writes. Read-only mode and the chat ACL still apply; list toolsets explicitly if you relied on the previous set.
 - Optional lazy tool loading (`TELEGRAM_TOOL_LOADING=eager|lazy`, default `eager` = unchanged): lazy lists a small core plus `telegram_enable_toolsets` (toolsets with one-line description and token cost); enabling makes the already-registered tools visible to that MCP session and sends `notifications/tools/list_changed`. Allowlists, read-only mode and approval gates still apply. Setup wizard asks eager vs lazy. Startup tokens (tools/list + instructions, ≈chars/4): eager ≈3558, lazy ≈1817. Handshake-era clients see `tools.listChanged=true`; hot account activation keeps not-yet-enabled tools hidden. Scope: enablement is per MCP session (FastMCP session visibility) for handshake-era clients (initialize), so one client's enabled toolsets never appear for another. Sessionless clients (2026-07-28 `server/discover`) and the stateless HTTP transport get a new session per request, so enablement does not persist there: use `eager` or `TELEGRAM_TOOLSETS`. README lazy section lists verified `tools/list_changed` client support with sources.
