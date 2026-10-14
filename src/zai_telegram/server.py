@@ -181,7 +181,9 @@ def create_server(
     runtime = Runtime(config, transport, adapter)
     surface = surface or surface_from_env()
     # account_admin can add accounts at runtime: expose account selection up front.
-    runtime.account_selection = config.multi_account or "telegram_add_account" in surface.tools
+    runtime.account_selection = config.multi_account or (
+        transport == "stdio" and "telegram_add_account" in surface.tools
+    )
 
     @asynccontextmanager
     async def lifespan(server):

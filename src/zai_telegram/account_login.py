@@ -18,6 +18,7 @@ Safety model:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import json
 import os
@@ -131,7 +132,44 @@ class LoginSessions:
     async def cancel(self, actor: str) -> None:
         entry = self.pending.pop(actor, None)
         if entry:
+            task = entry.get("task")
+            if task is not None and not task.done():
+                task.cancel()
+                with contextlib.suppress(BaseException):
+                    await task
             await entry["client"].disconnect()
+
+
+def _qr_url(qr: Any) -> str | None:
+    """Current QR URL, or None once the token was accepted (no token left to show)."""
+    try:
+        return qr.url
+    except AttributeError:
+        return None
+
+
+async def _watch_qr(qr: Any, client: Any, deadline: float) -> Any:
+    """Keep a Telethon ``QRLogin.wait`` pending for the whole login window.
+
+    Telethon only sees the scan (``UpdateLoginToken``) while ``wait`` is running;
+    a scan that lands between two ``status`` calls would otherwise be lost and
+    the login would never finish. Expired tokens are recreated (``status`` then
+    shows the new QR). Gives up at ``deadline`` and disconnects the client.
+    """
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            await client.disconnect()
+            raise TimeoutError
+        try:
+            expires = qr.expires.timestamp() - time.time() if getattr(qr, "expires", None) else remaining
+        except AttributeError:
+            expires = remaining
+        try:
+            return await qr.wait(timeout=max(1.0, min(remaining, expires)))
+        except TimeoutError:
+            if time.time() < deadline:
+                await qr.recreate()
 
 
 def _client_factory(api_id: int, api_hash: str) -> Any:
@@ -142,6 +180,9 @@ def _client_factory(api_id: int, api_hash: str) -> Any:
 
 
 def register_account_login(server: Any, runtime: Any, client_factory=_client_factory) -> None:
+    if runtime.transport != "stdio":
+        # Never offered to remote callers, even when the toolset is listed.
+        return
     sessions = LoginSessions()
 
     @server.tool(
@@ -178,8 +219,21 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
                 raise ValueError("TELEGRAM_API_ID/TELEGRAM_API_HASH missing in the secret file") from None
             client = client_factory(api_id, api_hash)
             await client.connect()
-            qr = await client.qr_login()
-            sessions.pending[actor] = {"client": client, "qr": qr, "label": label, "at": time.time()}
+            try:
+                qr = await client.qr_login()
+            except BaseException:
+                await client.disconnect()
+                raise
+            began = time.time()
+            task = asyncio.ensure_future(_watch_qr(qr, client, began + _PENDING_TTL))
+            sessions.pending[actor] = {
+                "client": client,
+                "qr": qr,
+                "label": label,
+                "at": began,
+                "task": task,
+                "shown": qr.url,
+            }
             return {
                 "status": "scan_qr",
                 "label": label,
@@ -196,32 +250,42 @@ def register_account_login(server: Any, runtime: Any, client_factory=_client_fac
             return {"status": "not_started", "label": label, "next": "call action=start"}
         from telethon.errors import SessionPasswordNeededError
 
-        client, qr = entry["client"], entry["qr"]
-        try:
-            await qr.wait(timeout=STATUS_WAIT_SECONDS)
-        except SessionPasswordNeededError:
-            await sessions.cancel(actor)
-            return {
-                "status": "password_required",
-                "label": label,
-                "next": (
-                    "This account has a 2FA password. Never type it in chat: finish locally with "
-                    "`zai-telegram-mcp-setup --add-account "
-                    + label
-                    + " --directory <setup dir> --qr` in a terminal "
-                    "(the password is typed there, hidden); the running server picks it up."
-                ),
-            }
-        except TimeoutError:
-            if getattr(qr, "expires", None) and qr.expires.timestamp() <= time.time():
-                await qr.recreate()
-                return {"status": "scan_qr", "label": label, "qr": qr_text(qr.url), "refreshed": True}
+        client, qr, task = entry["client"], entry["qr"], entry["task"]
+        done, _ = await asyncio.wait({task}, timeout=STATUS_WAIT_SECONDS)
+        if not done:
+            url = _qr_url(qr)
+            if url is not None and url != entry["shown"]:
+                entry["shown"] = url
+                return {"status": "scan_qr", "label": label, "qr": qr_text(url), "refreshed": True}
             return {"status": "waiting", "label": label, "next": "scan the QR, then call action=status again"}
+        failure = None if task.cancelled() else task.exception()
+        if task.cancelled() or failure is not None:
+            await sessions.cancel(actor)
+            if isinstance(failure, SessionPasswordNeededError):
+                return {
+                    "status": "password_required",
+                    "label": label,
+                    "next": (
+                        "This account has a 2FA password. Never type it in chat: finish locally with "
+                        "`zai-telegram-mcp-setup --add-account "
+                        + label
+                        + " --directory <setup dir> --qr` in a terminal "
+                        "(the password is typed there, hidden); the running server picks it up."
+                    ),
+                }
+            if isinstance(failure, TimeoutError):
+                return {
+                    "status": "not_started",
+                    "label": label,
+                    "next": "QR login expired; call action=start",
+                }
+            raise ValueError("QR login failed; call action=start to try again")
         session = client.session.save()
         await sessions.cancel(actor)
         if not session:
             raise ValueError("login produced no session")
         await asyncio.to_thread(store_session, config.secret_path, label, session)
-        raw = os.environ.get("TELEGRAM_BINDINGS_FILE")
-        granted = await asyncio.to_thread(grant_label, Path(raw) if raw else None, actor, label)
+        # The runtime captured the bindings path at start: the embedded Telegram
+        # runtime clears TELEGRAM_* variables from os.environ when it loads.
+        granted = await asyncio.to_thread(grant_label, runtime.bindings_path, actor, label)
         return await _activate(runtime, actor, label, granted)

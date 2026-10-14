@@ -1,5 +1,6 @@
 """In-chat QR add-account: stdio only, no secrets returned, never overwrites, 2FA stays local. Mocks only."""
 
+import asyncio
 import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -26,6 +27,9 @@ class FakeQR:
         self.outcome = outcome
 
     async def wait(self, timeout):  # noqa: ASYNC109 - mirrors Telethon QRLogin.wait
+        if isinstance(self.outcome, TimeoutError):
+            await asyncio.sleep(timeout)
+            raise TimeoutError
         if self.outcome is not None:
             raise self.outcome
 
@@ -62,6 +66,7 @@ def make_server(config, monkeypatch, outcome=None):
     monkeypatch.setattr(
         srv, "register_account_login", lambda s, r: account_login.register_account_login(s, r, factory)
     )
+    monkeypatch.setattr(account_login, "STATUS_WAIT_SECONDS", 0.05)
     surface = build_surface("default,account_admin")
     return create_server(config, transport="stdio", adapter=FixtureAdapter(), surface=surface), clients
 
@@ -196,3 +201,78 @@ async def test_adapter_hot_activation_requires_pure_addition(config, monkeypatch
     account_login.store_session(config.secret_path, "more", "synthetic-more")
     with pytest.raises(ProviderError):
         await adapter.activate_account("more")
+
+
+class EventQR(FakeQR):
+    """Models Telethon: a scan (UpdateLoginToken) is seen only by a running ``wait``."""
+
+    def __init__(self):
+        super().__init__(None)
+        self.waiters: list[asyncio.Event] = []
+
+    async def wait(self, timeout):  # noqa: ASYNC109 - mirrors Telethon QRLogin.wait
+        event = asyncio.Event()
+        self.waiters.append(event)
+        try:
+            await asyncio.wait_for(event.wait(), timeout)
+        finally:
+            self.waiters.remove(event)
+
+    def scan(self):
+        for event in list(self.waiters):
+            event.set()
+
+
+async def test_scan_between_status_calls_is_not_lost(config, monkeypatch):
+    """Regression: the user scans before the agent calls status (no wait running then)."""
+    server, clients = make_server(config, monkeypatch)
+    async with Client(server) as client:
+        monkeypatch.setattr(FakeClient, "qr_login", lambda self: _event_qr(self))
+        await client.call_tool(ADD, {"label": "work"})
+        await asyncio.sleep(0.01)
+        clients[0].qr.scan()
+        await asyncio.sleep(0.01)
+        done = (await client.call_tool(ADD, {"label": "work", "action": "status"})).data
+    assert done["status"] == "added"
+    assert read_secret_env(config.secret_path)["TELEGRAM_SESSION_STRING_WORK"] == "synthetic-new-session"
+    assert clients[0].disconnected
+
+
+async def _event_qr(fake):
+    fake.qr = EventQR()
+    return fake.qr
+
+
+async def test_binding_saved_after_embedded_runtime_clears_env(config, monkeypatch, tmp_path):
+    """Regression: loading the embedded runtime deletes TELEGRAM_* from os.environ."""
+    bindings = tmp_path / "bindings.json"
+    bindings.write_text(json.dumps({"local-operator": "default"}))
+    bindings.chmod(0o600)
+    monkeypatch.setenv("TELEGRAM_BINDINGS_FILE", str(bindings))
+    server, _ = make_server(config, monkeypatch)
+    monkeypatch.delenv("TELEGRAM_BINDINGS_FILE")
+    async with Client(server) as client:
+        await client.call_tool(ADD, {"label": "work"})
+        done = (await client.call_tool(ADD, {"label": "work", "action": "status"})).data
+    assert done["status"] == "added"
+    assert json.loads(bindings.read_text())["local-operator"] == ["default", "work"]
+
+
+async def test_cancel_stops_pending_login(config, monkeypatch):
+    server, clients = make_server(config, monkeypatch, TimeoutError())
+    async with Client(server) as client:
+        await client.call_tool(ADD, {"label": "work"})
+        cancelled = (await client.call_tool(ADD, {"label": "work", "action": "cancel"})).data
+        assert cancelled["status"] == "cancelled"
+    assert clients[0].disconnected
+
+
+def test_http_server_never_offers_add_account(config):
+    from fastmcp.server.auth.providers.jwt import RSAKeyPair
+
+    settings = replace(config, public_key=RSAKeyPair.generate().public_key)
+    server = create_server(
+        settings, transport="http", adapter=FixtureAdapter(), surface=build_surface("default,account_admin")
+    )
+    names = {tool.name for key, tool in server.local_provider._components.items() if key.startswith("tool:")}
+    assert ADD not in names and "telegram_list_accounts" not in names
