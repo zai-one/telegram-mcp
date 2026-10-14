@@ -259,10 +259,14 @@ async def edit_forum_topic(client: Any, args: dict[str, Any]) -> dict[str, Any]:
     if title is None and not flags:
         raise ProviderError("Telegram edit_forum_topic needs title, closed or hidden")
     topic_id = _int(args.get("topic_id"), "topic_id", 1, 2**31 - 1)
+    title = title.strip() if title is not None else None
     await client(
         functions.messages.EditForumTopicRequest(peer=entity, topic_id=topic_id, title=title, **flags)
     )
     return {"status": "edited", "topic_id": topic_id}
+
+
+DELETE_TOPIC_BATCHES = 50
 
 
 async def delete_forum_topic(client: Any, args: dict[str, Any]) -> dict[str, Any]:
@@ -270,8 +274,13 @@ async def delete_forum_topic(client: Any, args: dict[str, Any]) -> dict[str, Any
 
     entity = await client.get_input_entity(_chat(args.get("chat_id")))
     topic_id = _int(args.get("topic_id"), "topic_id", 2, 2**31 - 1)
-    await client(functions.messages.DeleteTopicHistoryRequest(peer=entity, top_msg_id=topic_id))
-    return {"status": "deleted", "topic_id": topic_id}
+    # messages.affectedHistory with offset > 0 means "call again": large topics are
+    # deleted in batches (https://core.telegram.org/method/messages.deleteTopicHistory).
+    for _ in range(DELETE_TOPIC_BATCHES):
+        result = await client(functions.messages.DeleteTopicHistoryRequest(peer=entity, top_msg_id=topic_id))
+        if not getattr(result, "offset", 0):
+            return {"status": "deleted", "topic_id": topic_id}
+    return {"status": "partially_deleted", "topic_id": topic_id, "next": "call delete_forum_topic again"}
 
 
 async def rename_folder(client: Any, args: dict[str, Any]) -> dict[str, Any]:

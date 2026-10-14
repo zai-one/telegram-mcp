@@ -242,3 +242,35 @@ async def test_rename_folder_handles_shared_chatlists():
     sent = client.sent[0]
     assert sent.id == 4 and isinstance(sent.filter, types.DialogFilterChatlist)
     assert sent.filter.title.text == "New"
+
+
+class TopicClient:
+    def __init__(self, offsets):
+        self.offsets, self.sent = list(offsets), []
+
+    async def get_input_entity(self, chat):
+        return chat
+
+    async def __call__(self, request):
+        self.sent.append(request)
+        return SimpleNamespace(pts=1, pts_count=1, offset=self.offsets.pop(0) if self.offsets else 0)
+
+
+async def test_delete_forum_topic_repeats_until_offset_is_zero():
+    """Regression: affectedHistory.offset > 0 means the topic is only partly deleted."""
+    client = TopicClient([100, 50, 0])
+    result = await native.delete_forum_topic(client, {"chat_id": -1001, "topic_id": 5})
+    assert result["status"] == "deleted" and len(client.sent) == 3
+
+
+async def test_delete_forum_topic_reports_partial_after_batch_cap(monkeypatch):
+    monkeypatch.setattr(native, "DELETE_TOPIC_BATCHES", 2)
+    client = TopicClient([100, 100, 100])
+    result = await native.delete_forum_topic(client, {"chat_id": -1001, "topic_id": 5})
+    assert result["status"] == "partially_deleted" and len(client.sent) == 2
+
+
+async def test_edit_forum_topic_sends_stripped_title():
+    client = TopicClient([])
+    await native.edit_forum_topic(client, {"chat_id": -1001, "topic_id": 5, "title": "  News  "})
+    assert client.sent[0].title == "News"
