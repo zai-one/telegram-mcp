@@ -8,3 +8,5 @@ Read only the task-relevant public documentation. Personal workspace notes are o
 
 - [README](../../README.md): supported features and installation.
 - [Contributing](../../CONTRIBUTING.md): development and release checks.
+
+- Repository maintenance, release checks and safety: read [maintenance rules](maintenance.md); preserve the listed checks, licenses and publication gates.
