@@ -54,6 +54,8 @@ def test_case_path_router_skill_guide_tool(case):
     if case.get("guide"):
         assert re.search(rf"guide [^>]*\b{re.escape(case['guide'])}\b", line)
         detail += guide(case["guide"])
+    if case.get("upstream"):
+        assert case["upstream"] in detail, f"{case['upstream']} not documented via {line!r}"
     tool = case["first_tool"]
     if tool:
         assert tool in KNOWN_TOOLS
@@ -83,7 +85,7 @@ async def test_every_capability_is_reachable_from_router(config):
         reachable_docs += guide(topic)
     assert "telegram://playbook" in lines.splitlines()[-1]
     # Skills and guides: named by the router, or listed by the playbook it points to.
-    surface = build_surface("all,advanced_read")
+    surface = build_surface("all,advanced_read,event_feed,account_admin")
     async with Client(
         create_server(config, transport="stdio", adapter=FixtureAdapter(), surface=surface)
     ) as c:

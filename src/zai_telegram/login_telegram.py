@@ -41,3 +41,60 @@ def _save_session(destination: Path, api_id: int, api_hash: str, session: str) -
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(f"TELEGRAM_API_ID={api_id}\nTELEGRAM_API_HASH={api_hash}\n")
         stream.write(f"TELEGRAM_SESSION_STRING={session}\n")
+
+
+async def add_account(
+    secret_path: Path,
+    label: str,
+    *,
+    bindings_path: Path | None = None,
+    actor: str = "local-operator",
+    use_qr: bool = False,
+) -> bool:
+    """Log in one more account locally and add it under ``label`` to existing files.
+
+    Phone login (code) or QR login; a 2FA password is read with getpass in this
+    terminal only. The session goes to ``TELEGRAM_SESSION_STRING_<LABEL>`` in the
+    existing private secret file (never overwritten); the label is granted to
+    ``actor`` in the bindings file. Returns True when the binding was updated.
+    """
+    from zai_telegram.account_login import LABEL, qr_text, save_account
+    from zai_telegram.secrets import read_private_secret_env
+
+    if LABEL.fullmatch(label) is None or label == "default":
+        raise ValueError("label must match [a-z][a-z0-9_]{0,31} and not be 'default'")
+    secret = await asyncio.to_thread(read_private_secret_env, secret_path)
+    if secret.get(f"TELEGRAM_SESSION_STRING_{label.upper()}"):
+        raise ValueError("account label already configured")
+    api_id, api_hash = int(secret["TELEGRAM_API_ID"]), secret["TELEGRAM_API_HASH"]
+    client = TelegramClient(StringSession(), api_id, api_hash)
+    try:
+        await client.connect()
+        try:
+            if use_qr:
+                qr = await client.qr_login()
+                while True:
+                    print(qr_text(qr.url))
+                    print("Scan in Telegram: Settings > Devices > Link Desktop Device (waiting 60 s)...")
+                    try:
+                        await qr.wait(timeout=60)
+                        break
+                    except TimeoutError:
+                        await qr.recreate()
+            else:
+                phone = (
+                    await asyncio.to_thread(getpass.getpass, "Phone number of the new account: ")
+                ).strip()
+                sent = await client.send_code_request(phone)
+                code = (await asyncio.to_thread(getpass.getpass, "Telegram login code: ")).strip()
+                await client.sign_in(phone=phone, code=code, phone_code_hash=sent.phone_code_hash)
+        except SessionPasswordNeededError:
+            password = await asyncio.to_thread(getpass.getpass, "Telegram two-step verification password: ")
+            await client.sign_in(password=password)
+        session = client.session.save()
+        if not session:
+            raise ValueError("empty session")
+    finally:
+        await client.disconnect()
+    # One lock covers the label re-check and both file updates (in-chat adders too).
+    return await asyncio.to_thread(save_account, secret_path, bindings_path, actor, label, session)

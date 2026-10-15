@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import dataclasses
+import json
 import math
+import os
 import time
 from contextvars import ContextVar
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -14,6 +19,7 @@ from zai_telegram.adapter import TelegramAdapter
 from zai_telegram.config import ServiceConfig
 from zai_telegram.errors import SafeToolError, safe_provider_error
 from zai_telegram.sanitizer import DURABLE_SANITIZER_LIMITS, sanitize_provider_response
+from zai_telegram.secrets import require_private_file
 from zai_telegram.state import StateStore
 from zai_telegram.transport import (
     LocalPreDispatchDenied,
@@ -34,6 +40,7 @@ WRITE_TOOLS = frozenset(
         "telegram_send_many",
         "telegram_outbox_status",
         "telegram_write",
+        "telegram_add_account",
     }
 )
 
@@ -102,6 +109,84 @@ class Runtime:
         self.registry = Registry(self)
         # One immutable credential set per process; never consult caller-provided paths.
         self.secret_values = config.secrets
+        # Per-call ``account`` argument on every tool (multi-account or account_admin).
+        self.account_selection = config.multi_account
+        # Called once when account selection turns on at runtime (registrar re-exposes tools).
+        self.on_account_selection = None
+        raw = os.environ.get("TELEGRAM_BINDINGS_FILE", "").strip()
+        self.bindings_path = Path(raw).resolve() if raw else None
+        self._file_marks: dict[str, tuple[int, int] | None] = {}
+        self._refresh_marks()
+
+    @staticmethod
+    def _mark(path: Path | None) -> tuple[int, int] | None:
+        if path is None:
+            return None
+        try:
+            info = path.stat()
+        except OSError:
+            return None
+        return (info.st_mtime_ns, info.st_size)
+
+    def _refresh_marks(self) -> dict[str, bool]:
+        changed = {}
+        for name, path in (("secret", self.config.secret_path), ("bindings", self.bindings_path)):
+            mark = self._mark(path)
+            changed[name] = name in self._file_marks and self._file_marks[name] != mark
+            self._file_marks[name] = mark
+        return changed
+
+    async def refresh_local_files(self) -> None:
+        """Pick up sessions/labels added while running (in chat or `--add-account`).
+
+        Secret change: refresh the redaction set (the adapter hot-adds pure
+        session additions on its next load check). Bindings change: reload the
+        private bindings file and replace the live grants; an invalid file keeps
+        the previous grants. Turning multi-account on re-exposes ``account``.
+        """
+        changed = self._refresh_marks()
+        if changed["secret"]:
+            with contextlib.suppress(OSError, ValueError):
+                self.secret_values = self.config.secrets
+        if changed["bindings"] and self.bindings_path is not None:
+            try:
+                require_private_file(self.bindings_path)
+                data = json.loads(self.bindings_path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    raise ValueError("binding map required")
+                self._apply_config(dataclasses.replace(self.config, bindings=data, account_grants={}))
+            except (OSError, ValueError):
+                return
+        if self.config.multi_account and not self.account_selection:
+            await self.enable_account_selection()
+
+    def _apply_config(self, updated: ServiceConfig) -> None:
+        self.config = self.settings = updated
+        self.store.config = updated
+        with contextlib.suppress(OSError, ValueError):
+            self.secret_values = updated.secrets
+
+    async def enable_account_selection(self) -> None:
+        if self.account_selection:
+            return
+        self.account_selection = True
+        if self.on_account_selection is not None:
+            await self.on_account_selection()
+
+    def grant_account(self, actor: str, label: str) -> bool:
+        """Grant ``label`` to ``actor`` in the live config (after the bindings file changed).
+
+        Returns True when the account is selectable now. Tool schemas carry the
+        ``account`` argument only on multi-account servers, so a server started
+        single-account still needs a restart before the label can be chosen.
+        """
+        grants = {name: list(labels) for name, labels in self.config.account_grants.items()}
+        labels = grants.setdefault(str(actor), [])
+        if label not in labels:
+            labels.append(label)
+        self._apply_config(dataclasses.replace(self.config, bindings=grants, account_grants={}))
+        self._refresh_marks()
+        return self.account_selection
 
     def require_scopes(self, *scopes):
         def check(context):
@@ -166,6 +251,7 @@ class Runtime:
         execution_id, token, outcome = uuid4().hex, None, "error"
         began = False
         try:
+            await self.refresh_local_files()
             self.authorize(tool)
             actor = self.identity()
             if len(canonical_json(arguments).encode()) > 1_048_576:

@@ -423,7 +423,11 @@ def with_account(readonly=False):
 
 
 _last_conn_verified: dict[int, float] = {}
+# zai backport (upstream 2980601): one reconnect per client at a time.
+_conn_locks: dict[int, asyncio.Lock] = {}
 _CONN_VERIFY_INTERVAL: float = 30.0  # seconds between live pings
+# zai backport (upstream dd71a12): bounded reconnect, never interactive login.
+_RECONNECT_TIMEOUT: float = 30.0
 
 
 async def _force_reconnect(cl: TelegramClient):
@@ -434,10 +438,24 @@ async def _force_reconnect(cl: TelegramClient):
         await cl.disconnect()
     except Exception:
         pass
-    await cl.connect()
+    try:
+        await asyncio.wait_for(cl.connect(), timeout=_RECONNECT_TIMEOUT)
+    except asyncio.TimeoutError as exc:
+        raise ConnectionError(
+            f"Reconnecting to Telegram timed out after {_RECONNECT_TIMEOUT:.0f}s."
+        ) from exc
     if not await cl.is_user_authorized():
-        reconnect_logger.warning("Client not authorized after reconnect, calling start()...")
-        await cl.start()
+        # Never fall back to cl.start(): its phone/code prompts call input()
+        # synchronously, blocking the event loop and, over stdio, reading MCP
+        # protocol frames as a phone number.
+        try:
+            await cl.disconnect()
+        except Exception:
+            pass
+        raise RuntimeError(
+            "Telegram session is not authorized after reconnect (terminated or logged out). "
+            "Re-authorize outside the server and restart it."
+        )
     _last_conn_verified[id(cl)] = time.time()
     reconnect_logger.warning("Forced reconnect successful")
 
@@ -457,24 +475,27 @@ async def ensure_connected(cl: TelegramClient = None):
 
     key = id(cl)
 
-    if not cl.is_connected():
-        await _force_reconnect(cl)
-        return
+    # Concurrent tool calls must not reconnect the same client in parallel:
+    # one call's disconnect() would tear down another's in-flight connect().
+    async with _conn_locks.setdefault(key, asyncio.Lock()):
+        if not cl.is_connected():
+            await _force_reconnect(cl)
+            return
 
-    # Skip verification if recently confirmed alive
-    now = time.time()
-    if now - _last_conn_verified.get(key, 0.0) < _CONN_VERIFY_INTERVAL:
-        return
+        # Skip verification if recently confirmed alive
+        now = time.time()
+        if now - _last_conn_verified.get(key, 0.0) < _CONN_VERIFY_INTERVAL:
+            return
 
-    # Verify with a lightweight Telegram API call
-    try:
-        await asyncio.wait_for(
-            cl(functions.help.GetNearestDcRequest()),
-            timeout=5.0,
-        )
-        _last_conn_verified[key] = now
-    except (ConnectionError, OSError, asyncio.TimeoutError, Exception):
-        await _force_reconnect(cl)
+        # Verify with a lightweight Telegram API call
+        try:
+            await asyncio.wait_for(
+                cl(functions.help.GetNearestDcRequest()),
+                timeout=5.0,
+            )
+            _last_conn_verified[key] = now
+        except (ConnectionError, OSError, asyncio.TimeoutError, Exception):
+            await _force_reconnect(cl)
 
 
 # Setup robust logging with both file and console output

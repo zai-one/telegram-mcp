@@ -16,11 +16,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # +wait_for_new_message / wait_for_settled_message (events) ~600 B each; grow only with default tools.
-BUDGET_BYTES = {"default": 12_400, "all": 13_200}
+BUDGET_BYTES = {"default": 12_400, "all": 13_200, "all,advanced_read,event_feed,account_admin": 17_800}
 # Always-loaded agent context = instructions + tools/list + every skill frontmatter.
 # Estimated tokens = bytes / 4 (conservative for JSON/English; Russian costs more,
 # but frontmatters are mostly English). Budget per preset.
-CONTEXT_TOKEN_BUDGET = {"default": 4_200, "all": 4_400}
+CONTEXT_TOKEN_BUDGET = {"default": 4_200, "all": 4_400, "all,advanced_read,event_feed,account_admin": 5_450}
+# account_admin adds the optional `account` argument to every tool (opt-in only).
+# Flat default: v0.5.0 always-loaded context (tokens). Opt-in capabilities (event feed,
+# QR add-account, telegram_read/telegram_write parity names) must not raise these.
+FLAT_BASELINE_TOKENS = {"default": 4_076, "all": 4_264}
 NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
@@ -104,6 +108,11 @@ def main() -> int:
         if info["context_tokens_est"] > CONTEXT_TOKEN_BUDGET[preset]:
             limit = CONTEXT_TOKEN_BUDGET[preset]
             problems.append(f"{preset}: agent context ~{info['context_tokens_est']} tokens > {limit}")
+        baseline = FLAT_BASELINE_TOKENS.get(preset)
+        if baseline is not None and info["context_tokens_est"] > baseline:
+            problems.append(
+                f"{preset}: context ~{info['context_tokens_est']} tokens grew past v0.5.0 {baseline}"
+            )
         if info["bytes"] > BUDGET_BYTES[preset]:
             problems.append(f"{preset}: tools/list {info['bytes']} B > {BUDGET_BYTES[preset]} B")
         if info["instructions"] > 1300:

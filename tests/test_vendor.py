@@ -153,3 +153,20 @@ def test_write_allowlist_is_frozen():
     assert "delete_chat_history" in TELEGRAM_WRITE_ALLOWLIST
     assert TELEGRAM_WRITE_ALLOWLIST["delete_chat_history"] == "high"
     assert "unexpected_new_write" not in TELEGRAM_WRITE_ALLOWLIST
+
+
+def test_upstream_backports_are_applied_and_recorded():
+    root = files("zai_telegram").joinpath("_vendor")
+    runtime = root.joinpath("telegram_mcp/runtime.py").read_text(encoding="utf-8")
+    messages = root.joinpath("telegram_mcp/tools/messages.py").read_text(encoding="utf-8")
+    # 2980601: one reconnect per client; dd71a12: no interactive start() on reconnect.
+    assert "_conn_locks.setdefault(key, asyncio.Lock())" in runtime
+    assert "await cl.start()" not in runtime and "_RECONNECT_TIMEOUT" in runtime
+    # 312cd00 list_messages to_date with search; 7fc6b4a custom/empty reactions.
+    assert 'params["offset_date"] = to_date_obj + timedelta(microseconds=1)' in messages
+    assert "ReactionCustomEmoji(document_id=int(document_id))" in messages
+    manifest = json.loads(root.joinpath("manifest.json").read_text(encoding="utf-8"))
+    expected = ["2980601", "dd71a12", "312cd00", "7fc6b4a", "d5ddc8c"]
+    assert manifest["backports"]["upstream_commits"] == expected
+    groups = root.joinpath("telegram_mcp/tools/groups.py").read_text(encoding="utf-8")
+    assert "limit=skip + page_size + 1" in groups and "offset=offset" not in groups

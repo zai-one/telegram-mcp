@@ -156,5 +156,57 @@
     "route": "Unsure",
     "resource": "telegram://playbook",
     "first_tool": null
+  },
+  {
+    "request": "следи за всеми чатами, покажи кто что удалил или отредактировал",
+    "route": "Wait for reply/feed",
+    "skill": "telegram-watch-replies",
+    "first_tool": "telegram_poll_events"
+  },
+  {
+    "request": "stream me edits and deletions as they happen",
+    "route": "Wait for reply/feed",
+    "guide": "events",
+    "first_tool": "telegram_poll_events"
+  },
+  {
+    "request": "добавь мой второй аккаунт телеги прямо тут",
+    "route": "Other/add account",
+    "guide": "accounts",
+    "first_tool": "telegram_add_account"
+  },
+  {
+    "request": "log in another telegram account from chat",
+    "route": "Other/add account",
+    "guide": "accounts",
+    "first_tool": "telegram_add_account"
+  },
+  {
+    "request": "открой сообщение по ссылке t.me/c/123/45",
+    "route": "Members/pinned/reactions",
+    "guide": "advanced-read",
+    "first_tool": "telegram_read",
+    "upstream": "get_message_by_link"
+  },
+  {
+    "request": "выгрузи все непрочитанные сообщения не помечая прочитанными",
+    "route": "Members/pinned/reactions",
+    "guide": "advanced-read",
+    "first_tool": "telegram_read",
+    "upstream": "export_unread_messages"
+  },
+  {
+    "request": "vote option 2 in that poll",
+    "route": "Admin/other writes",
+    "guide": "permissions",
+    "first_tool": "telegram_write",
+    "upstream": "vote_poll"
+  },
+  {
+    "request": "кикни спамера из группы и закрой топик",
+    "route": "Admin/other writes",
+    "skill": "telegram-group-admin",
+    "first_tool": "telegram_write",
+    "upstream": "remove_user"
   }
 ]

@@ -9,6 +9,7 @@ from fastmcp.exceptions import ToolError
 from test_runtime import FixtureAdapter
 
 from zai_telegram.adapter import TELEGRAM_READ_ALLOWLIST, TelegramAdapter
+from zai_telegram.native import NATIVE_READS
 from zai_telegram.server import create_server
 from zai_telegram.toolsets import build_surface
 
@@ -35,7 +36,7 @@ def vendor_read_only_tools():
 
 
 def test_allowlist_is_vendor_read_only_and_excludes_risky_reads():
-    assert vendor_read_only_tools() >= TELEGRAM_READ_ALLOWLIST
+    assert vendor_read_only_tools() >= TELEGRAM_READ_ALLOWLIST - set(NATIVE_READS)
     assert not TELEGRAM_READ_ALLOWLIST & {"export_chat_invite", "get_invite_link", "get_gif_search"}
     assert len(TELEGRAM_READ_ALLOWLIST) >= 40
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zai-telegram-mcp"
-version = "0.5.0"
+version = "0.6.0"
 description = "Telegram conversations, bounded media and durable message polling for AI assistants"
 readme = "README.md"
 license = "LicenseRef-ZAI-ONE"
